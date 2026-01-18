@@ -1,0 +1,29 @@
+progress.txt
+  c032f5d92b4ba550 8
+PRD.md
+  c032f5d92b4ba550 16
+tests/qwen-parsing.bats
+  c032f5d92b4ba550 1-84
+ralphy.sh
+  c032f5d92b4ba550 1111,1116-1123,1128-1151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "fc9657f976e8525b24151e5ca15b52a718def6a5",
+  "prompts": {
+    "c032f5d92b4ba550": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0390117-c0ab-4538-b47d-eddec029a20e",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 195,
+      "total_deletions": 80,
+      "accepted_lines": 119,
+      "overriden_lines": 0
+    }
+  }
+}
