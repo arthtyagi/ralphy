@@ -1,0 +1,29 @@
+PRD.md
+  0993cc389775b226 15
+tests/resume.bats
+  0993cc389775b226 1-63
+ralphy.sh
+  0993cc389775b226 27,166,280-283,2247,2264-2275
+progress.txt
+  0993cc389775b226 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "fe1baa4636e2b4afade1eb90edeef0414e381455",
+  "prompts": {
+    "0993cc389775b226": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "635b9ba8-9d43-48eb-aef8-ad20ca882f92",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 85,
+      "total_deletions": 2,
+      "accepted_lines": 84,
+      "overriden_lines": 0
+    }
+  }
+}
