@@ -70,8 +70,10 @@ iteration=0
 retry_count=0
 declare -a parallel_pids=()
 declare -a task_branches=()
+declare -a integration_branches=()  # Track integration branches for cleanup on interrupt
 WORKTREE_BASE=""  # Base directory for parallel agent worktrees
 ORIGINAL_DIR=""   # Original working directory (for worktree operations)
+ORIGINAL_BASE_BRANCH=""  # Original base branch before integration branches
 
 # ============================================
 # UTILITY FUNCTIONS
@@ -450,10 +452,18 @@ cleanup() {
   if [[ $exit_code -eq 130 ]]; then
     printf "\n"
     log_warn "Interrupted! Cleaned up."
-    
+
     # Show branches created if any
     if [[ -n "${task_branches[*]+"${task_branches[*]}"}" ]]; then
       log_info "Branches created: ${task_branches[*]}"
+    fi
+
+    # Show integration branches if any (for parallel group workflows)
+    if [[ -n "${integration_branches[*]+"${integration_branches[*]}"}" ]]; then
+      log_info "Integration branches: ${integration_branches[*]}"
+      if [[ -n "$ORIGINAL_BASE_BRANCH" ]]; then
+        log_info "To resume: merge integration branches into $ORIGINAL_BASE_BRANCH"
+      fi
     fi
   fi
 }
@@ -1162,7 +1172,7 @@ run_single_task() {
 
     # Check for empty response
     if [[ -z "$result" ]]; then
-      ((retry_count++))
+      ((retry_count++)) || true
       log_error "Empty response (attempt $retry_count/$MAX_RETRIES)"
       if [[ $retry_count -lt $MAX_RETRIES ]]; then
         log_info "Retrying in ${RETRY_DELAY}s..."
@@ -1178,7 +1188,7 @@ run_single_task() {
     # Check for API errors
     local error_msg
     if ! error_msg=$(check_for_errors "$result"); then
-      ((retry_count++))
+      ((retry_count++)) || true
       log_error "API error: $error_msg (attempt $retry_count/$MAX_RETRIES)"
       if [[ $retry_count -lt $MAX_RETRIES ]]; then
         log_info "Retrying in ${RETRY_DELAY}s..."
@@ -1456,7 +1466,7 @@ Focus only on implementing: $task_name"
     if [[ -n "$result" ]]; then
       local error_msg
       if ! error_msg=$(check_for_errors "$result"); then
-        ((retry++))
+        ((retry++)) || true
         echo "API error: $error_msg (attempt $retry/$MAX_RETRIES)" >> "$log_file"
         sleep "$RETRY_DELAY"
         continue
@@ -1465,7 +1475,7 @@ Focus only on implementing: $task_name"
       break
     fi
     
-    ((retry++))
+    ((retry++)) || true
     echo "Retry $retry/$MAX_RETRIES after empty response" >> "$log_file"
     sleep "$RETRY_DELAY"
   done
@@ -1562,8 +1572,9 @@ run_parallel_tasks() {
   log_info "Base branch: $BASE_BRANCH"
 
   # Store original base branch for final merge (addresses Greptile review)
-  local ORIGINAL_BASE_BRANCH="$BASE_BRANCH"
-  local integration_branches=()  # Track integration branches for cleanup
+  # Using global variables so cleanup() can access them on interrupt
+  ORIGINAL_BASE_BRANCH="$BASE_BRANCH"
+  integration_branches=()  # Reset for this run
 
   # Export variables needed by subshell agents
   export AI_ENGINE MAX_RETRIES RETRY_DELAY PRD_SOURCE PRD_FILE CREATE_PR PR_DRAFT
@@ -1598,7 +1609,7 @@ run_parallel_tasks() {
     local total_group_tasks=${#tasks[@]}
 
     while [[ $batch_start -lt $total_group_tasks ]]; do
-      ((batch_num++))
+      ((batch_num++)) || true
       local batch_end=$((batch_start + MAX_PARALLEL))
       [[ $batch_end -gt $total_group_tasks ]] && batch_end=$total_group_tasks
       local batch_size=$((batch_end - batch_start))
@@ -1621,7 +1632,7 @@ run_parallel_tasks() {
       for ((i = batch_start; i < batch_end; i++)); do
         local task="${tasks[$i]}"
         local agent_num=$((iteration + 1))
-        ((iteration++))
+        ((iteration++)) || true
 
         local status_file=$(mktemp)
         local output_file=$(mktemp)
@@ -1667,17 +1678,17 @@ run_parallel_tasks() {
           case "$status" in
             "setting up")
               all_done=false
-              ((setting_up++))
+              ((setting_up++)) || true
               ;;
             running)
               all_done=false
-              ((running++))
+              ((running++)) || true
               ;;
             done)
-              ((done_count++))
+              ((done_count++)) || true
               ;;
             failed)
-              ((failed_count++))
+              ((failed_count++)) || true
               ;;
             *)
               # Check if process is still running
@@ -2171,7 +2182,7 @@ main() {
 
   # Sequential main loop
   while true; do
-    ((iteration++))
+    ((iteration++)) || true
     local result_code=0
     run_single_task "" "$iteration" || result_code=$?
     
