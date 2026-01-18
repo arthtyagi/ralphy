@@ -1,0 +1,25 @@
+PRD.md
+  13d36b89cb7de740 12
+progress.txt
+  13d36b89cb7de740 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "50d8b2ac1f362e6ceee91b45b55f82b4c93641cc",
+  "prompts": {
+    "13d36b89cb7de740": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "648253d8-568a-41e7-914a-f0c89494e832",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 1,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
