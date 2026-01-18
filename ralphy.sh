@@ -705,7 +705,7 @@ create_pull_request() {
     --head "$branch" \
     --title "$task" \
     --body "$body" \
-    $draft_flag 2>/dev/null) || {
+    ${draft_flag:+"$draft_flag"} 2>/dev/null) || {
     log_warn "Failed to create PR for $branch"
     return 1
   }
