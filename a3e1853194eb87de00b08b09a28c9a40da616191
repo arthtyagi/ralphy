@@ -1,0 +1,29 @@
+PRD.md
+  42b5e9cb04adcbec 21
+tests/model.bats
+  42b5e9cb04adcbec 1-74
+ralphy.sh
+  42b5e9cb04adcbec 28,167,286-289,983-984,992,997,1006,1011,1020,1025,1035,1041,1052,1058,1565,1568-1569,1579,1587,1598,1606,1617,1625,1638,1647,1659,1668,1787,2308
+progress.txt
+  42b5e9cb04adcbec 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "a3e1853194eb87de00b08b09a28c9a40da616191",
+  "prompts": {
+    "42b5e9cb04adcbec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "41133862-ba74-44e2-a696-b597718ebbdb",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 111,
+      "total_deletions": 5,
+      "accepted_lines": 109,
+      "overriden_lines": 0
+    }
+  }
+}
