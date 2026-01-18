@@ -1,0 +1,29 @@
+ralphy.sh
+  dac2885eb1575089 25,134,244-247,926-935,939-941,945-946,949-953,957-961,965,969-973,977,982-987,992,996-1001,1006,1009,1478-1480,1484,1487,1491-1498,1501-1508,1515,1518-1525,1532,1536-1547,1553,1556-1564,1572
+PRD.md
+  dac2885eb1575089 10
+progress.txt
+  dac2885eb1575089 2
+tests/timeout.bats
+  dac2885eb1575089 1-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "814aadf5d022dcb529e0e58c14c0e0aabd17258a",
+  "prompts": {
+    "dac2885eb1575089": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e12e78b8-3d14-49af-905d-a58e3e0a556d",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 186,
+      "total_deletions": 55,
+      "accepted_lines": 139,
+      "overriden_lines": 0
+    }
+  }
+}
