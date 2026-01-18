@@ -42,3 +42,27 @@
   run grep -A 20 'merge_agent_progress_files()' "$BATS_TEST_DIRNAME/../ralphy.sh"
   [[ "$output" == *'rm -f "$pfile"'* ]]
 }
+
+@test "agent progress file is copied to ORIGINAL_DIR before successful cleanup" {
+  # Verify the copy happens before cleanup_agent_worktree on success path
+  run grep -B 3 'Cleanup worktree (but keep branch)' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [[ "$output" == *'cp "$worktree_dir/$progress_file" "$ORIGINAL_DIR/$progress_file"'* ]]
+}
+
+@test "agent progress file is copied to ORIGINAL_DIR on failure before cleanup" {
+  # Verify the copy happens before cleanup_agent_worktree on failure path (else branch)
+  run grep -A 5 'Copy agent progress file to original directory before worktree cleanup (even on failure)' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [[ "$output" == *'cp "$worktree_dir/$progress_file" "$ORIGINAL_DIR/$progress_file"'* ]]
+}
+
+@test "agent progress file is copied before no-commit failure cleanup" {
+  # Verify the copy happens in the commit_count == 0 failure path
+  run grep -A 10 'No new commits created' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [[ "$output" == *'cp "$worktree_dir/$progress_file" "$ORIGINAL_DIR/$progress_file"'* ]]
+}
+
+@test "copy uses -s flag to check file exists and is non-empty" {
+  # The copy should only occur if the progress file exists and has content
+  run grep 'worktree_dir/\$progress_file' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [[ "$output" == *'-s "$worktree_dir/$progress_file"'* ]]
+}

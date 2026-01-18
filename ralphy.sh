@@ -1715,6 +1715,10 @@ Focus only on implementing: $task_name"
       echo "ERROR: No new commits created; treating task as failed." >> "$log_file"
       echo "failed" > "$status_file"
       echo "0 0" > "$output_file"
+      # Copy agent progress file to original directory before worktree cleanup
+      if [[ -s "$worktree_dir/$progress_file" ]]; then
+        cp "$worktree_dir/$progress_file" "$ORIGINAL_DIR/$progress_file"
+      fi
       cleanup_agent_worktree "$worktree_dir" "$branch_name" "$log_file"
       return 1
     fi
@@ -1736,14 +1740,23 @@ Focus only on implementing: $task_name"
     # Write success output
     echo "done" > "$status_file"
     echo "$input_tokens $output_tokens $branch_name" > "$output_file"
-    
+
+    # Copy agent progress file to original directory before worktree cleanup
+    if [[ -s "$worktree_dir/$progress_file" ]]; then
+      cp "$worktree_dir/$progress_file" "$ORIGINAL_DIR/$progress_file"
+    fi
+
     # Cleanup worktree (but keep branch)
     cleanup_agent_worktree "$worktree_dir" "$branch_name" "$log_file"
-    
+
     return 0
   else
     echo "failed" > "$status_file"
     echo "0 0" > "$output_file"
+    # Copy agent progress file to original directory before worktree cleanup (even on failure)
+    if [[ -s "$worktree_dir/$progress_file" ]]; then
+      cp "$worktree_dir/$progress_file" "$ORIGINAL_DIR/$progress_file"
+    fi
     cleanup_agent_worktree "$worktree_dir" "$branch_name" "$log_file"
     return 1
   fi

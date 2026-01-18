@@ -19,3 +19,7 @@ No new features. No refactoring for its own sake.
 
 - [x] Add warning when `--resume` and `--parallel` are used together (resume is ignored in parallel mode)
 - [x] Add `--model MODEL` flag to pass model selection to underlying AI CLI
+
+## Tasks (Round 3 - Critical Bug)
+
+- [x] Fix parallel mode: copy agent progress files from worktrees before cleanup, then merge (files are deleted before merge runs - merge is currently a no-op)
