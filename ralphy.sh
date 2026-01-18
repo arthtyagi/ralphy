@@ -22,6 +22,7 @@ DRY_RUN=false
 MAX_ITERATIONS=0  # 0 = unlimited
 MAX_RETRIES=3
 RETRY_DELAY=5
+AI_TIMEOUT=600  # 10-minute timeout for AI commands (in seconds)
 VERBOSE=false
 
 # Git branch options
@@ -130,6 +131,7 @@ ${BOLD}EXECUTION OPTIONS:${RESET}
   --max-iterations N  Stop after N iterations (0 = unlimited)
   --max-retries N     Max retries per task on failure (default: 3)
   --retry-delay N     Seconds between retries (default: 5)
+  --timeout N         AI command timeout in seconds (default: 600)
   --dry-run           Show what would be done without executing
 
 ${BOLD}PARALLEL EXECUTION:${RESET}
@@ -237,6 +239,10 @@ parse_args() {
         ;;
       --retry-delay)
         RETRY_DELAY="${2:-5}"
+        shift 2
+        ;;
+      --timeout)
+        AI_TIMEOUT="${2:-600}"
         shift 2
         ;;
       --parallel)
@@ -917,46 +923,90 @@ If ALL tasks in the PRD are complete, output <promise>COMPLETE</promise>."
 # AI ENGINE ABSTRACTION
 # ============================================
 
+get_timeout_cmd() {
+  if command -v timeout &>/dev/null; then
+    echo "timeout"
+  elif command -v gtimeout &>/dev/null; then
+    echo "gtimeout"
+  else
+    echo ""
+  fi
+}
+
 run_ai_command() {
   local prompt=$1
   local output_file=$2
-  
+  local timeout_cmd
+  timeout_cmd=$(get_timeout_cmd)
+
   case "$AI_ENGINE" in
     opencode)
       # OpenCode: use 'run' command with JSON format and permissive settings
-      OPENCODE_PERMISSION='{"*":"allow"}' opencode run \
-        --format json \
-        "$prompt" > "$output_file" 2>&1 &
+      if [[ -n "$timeout_cmd" ]]; then
+        OPENCODE_PERMISSION='{"*":"allow"}' "$timeout_cmd" "$AI_TIMEOUT" opencode run \
+          --format json \
+          "$prompt" > "$output_file" 2>&1 &
+      else
+        OPENCODE_PERMISSION='{"*":"allow"}' opencode run \
+          --format json \
+          "$prompt" > "$output_file" 2>&1 &
+      fi
       ;;
     cursor)
       # Cursor agent: use --print for non-interactive, --force to allow all commands
-      agent --print --force \
-        --output-format stream-json \
-        "$prompt" > "$output_file" 2>&1 &
+      if [[ -n "$timeout_cmd" ]]; then
+        "$timeout_cmd" "$AI_TIMEOUT" agent --print --force \
+          --output-format stream-json \
+          "$prompt" > "$output_file" 2>&1 &
+      else
+        agent --print --force \
+          --output-format stream-json \
+          "$prompt" > "$output_file" 2>&1 &
+      fi
       ;;
     qwen)
       # Qwen-Code: use CLI with JSON format and auto-approve tools
-      qwen --output-format stream-json \
-        --approval-mode yolo \
-        -p "$prompt" > "$output_file" 2>&1 &
+      if [[ -n "$timeout_cmd" ]]; then
+        "$timeout_cmd" "$AI_TIMEOUT" qwen --output-format stream-json \
+          --approval-mode yolo \
+          -p "$prompt" > "$output_file" 2>&1 &
+      else
+        qwen --output-format stream-json \
+          --approval-mode yolo \
+          -p "$prompt" > "$output_file" 2>&1 &
+      fi
       ;;
     codex)
       CODEX_LAST_MESSAGE_FILE="${output_file}.last"
       rm -f "$CODEX_LAST_MESSAGE_FILE"
-      codex exec --full-auto \
-        --json \
-        --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
-        "$prompt" > "$output_file" 2>&1 &
+      if [[ -n "$timeout_cmd" ]]; then
+        "$timeout_cmd" "$AI_TIMEOUT" codex exec --full-auto \
+          --json \
+          --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
+          "$prompt" > "$output_file" 2>&1 &
+      else
+        codex exec --full-auto \
+          --json \
+          --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
+          "$prompt" > "$output_file" 2>&1 &
+      fi
       ;;
     *)
       # Claude Code: use existing approach
-      claude --dangerously-skip-permissions \
-        --verbose \
-        --output-format stream-json \
-        -p "$prompt" > "$output_file" 2>&1 &
+      if [[ -n "$timeout_cmd" ]]; then
+        "$timeout_cmd" "$AI_TIMEOUT" claude --dangerously-skip-permissions \
+          --verbose \
+          --output-format stream-json \
+          -p "$prompt" > "$output_file" 2>&1 &
+      else
+        claude --dangerously-skip-permissions \
+          --verbose \
+          --output-format stream-json \
+          -p "$prompt" > "$output_file" 2>&1 &
+      fi
       ;;
   esac
-  
+
   ai_pid=$!
 }
 
@@ -1425,51 +1475,101 @@ Focus only on implementing: $task_name"
   local success=false
   local retry=0
   
+  local timeout_cmd
+  timeout_cmd=$(get_timeout_cmd)
+
   while [[ $retry -lt $MAX_RETRIES ]]; do
     case "$AI_ENGINE" in
       opencode)
-        (
-          cd "$worktree_dir"
-          OPENCODE_PERMISSION='{"*":"allow"}' opencode run \
-            --format json \
-            "$prompt"
-        ) > "$tmpfile" 2>>"$log_file"
+        if [[ -n "$timeout_cmd" ]]; then
+          (
+            cd "$worktree_dir"
+            OPENCODE_PERMISSION='{"*":"allow"}' "$timeout_cmd" "$AI_TIMEOUT" opencode run \
+              --format json \
+              "$prompt"
+          ) > "$tmpfile" 2>>"$log_file"
+        else
+          (
+            cd "$worktree_dir"
+            OPENCODE_PERMISSION='{"*":"allow"}' opencode run \
+              --format json \
+              "$prompt"
+          ) > "$tmpfile" 2>>"$log_file"
+        fi
         ;;
       cursor)
-        (
-          cd "$worktree_dir"
-          agent --print --force \
-            --output-format stream-json \
-            "$prompt"
-        ) > "$tmpfile" 2>>"$log_file"
+        if [[ -n "$timeout_cmd" ]]; then
+          (
+            cd "$worktree_dir"
+            "$timeout_cmd" "$AI_TIMEOUT" agent --print --force \
+              --output-format stream-json \
+              "$prompt"
+          ) > "$tmpfile" 2>>"$log_file"
+        else
+          (
+            cd "$worktree_dir"
+            agent --print --force \
+              --output-format stream-json \
+              "$prompt"
+          ) > "$tmpfile" 2>>"$log_file"
+        fi
         ;;
       qwen)
-        (
-          cd "$worktree_dir"
-          qwen --output-format stream-json \
-            --approval-mode yolo \
-            -p "$prompt"
-        ) > "$tmpfile" 2>>"$log_file"
+        if [[ -n "$timeout_cmd" ]]; then
+          (
+            cd "$worktree_dir"
+            "$timeout_cmd" "$AI_TIMEOUT" qwen --output-format stream-json \
+              --approval-mode yolo \
+              -p "$prompt"
+          ) > "$tmpfile" 2>>"$log_file"
+        else
+          (
+            cd "$worktree_dir"
+            qwen --output-format stream-json \
+              --approval-mode yolo \
+              -p "$prompt"
+          ) > "$tmpfile" 2>>"$log_file"
+        fi
         ;;
       codex)
-        (
-          cd "$worktree_dir"
-          CODEX_LAST_MESSAGE_FILE="$tmpfile.last"
-          rm -f "$CODEX_LAST_MESSAGE_FILE"
-          codex exec --full-auto \
-            --json \
-            --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
-            "$prompt"
-        ) > "$tmpfile" 2>>"$log_file"
+        CODEX_LAST_MESSAGE_FILE="$tmpfile.last"
+        rm -f "$CODEX_LAST_MESSAGE_FILE"
+        if [[ -n "$timeout_cmd" ]]; then
+          (
+            cd "$worktree_dir"
+            "$timeout_cmd" "$AI_TIMEOUT" codex exec --full-auto \
+              --json \
+              --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
+              "$prompt"
+          ) > "$tmpfile" 2>>"$log_file"
+        else
+          (
+            cd "$worktree_dir"
+            codex exec --full-auto \
+              --json \
+              --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
+              "$prompt"
+          ) > "$tmpfile" 2>>"$log_file"
+        fi
         ;;
       *)
-        (
-          cd "$worktree_dir"
-          claude --dangerously-skip-permissions \
-            --verbose \
-            -p "$prompt" \
-            --output-format stream-json
-        ) > "$tmpfile" 2>>"$log_file"
+        if [[ -n "$timeout_cmd" ]]; then
+          (
+            cd "$worktree_dir"
+            "$timeout_cmd" "$AI_TIMEOUT" claude --dangerously-skip-permissions \
+              --verbose \
+              -p "$prompt" \
+              --output-format stream-json
+          ) > "$tmpfile" 2>>"$log_file"
+        else
+          (
+            cd "$worktree_dir"
+            claude --dangerously-skip-permissions \
+              --verbose \
+              -p "$prompt" \
+              --output-format stream-json
+          ) > "$tmpfile" 2>>"$log_file"
+        fi
         ;;
     esac
     

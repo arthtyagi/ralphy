@@ -1,1 +1,2 @@
 2026-01-18: Bumped VERSION from 3.1.0 to 3.2.0 on line 15 of ralphy.sh. Added BATS test suite in tests/version.bats to verify version variable and --version flag output. Tests pass. Linting passes.
+2026-01-18: Added 10-minute timeout (AI_TIMEOUT=600) to AI commands. Added get_timeout_cmd() helper for cross-platform support (timeout on Linux, gtimeout on macOS). Wrapped all AI engine commands in run_ai_command() and run_parallel_agent() with timeout. Added --timeout N flag to override default. Added BATS tests in tests/timeout.bats. Tests pass. Linting passes (no errors).
