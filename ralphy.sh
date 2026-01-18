@@ -1108,17 +1108,47 @@ parse_ai_result() {
       output_tokens=0
       ;;
     qwen)
-      # Qwen-Code stream-json parsing (similar to Claude Code)
+      # Qwen-Code stream-json parsing with format validation and fallback
       local result_line
       result_line=$(echo "$result" | grep '"type":"result"' | tail -1)
 
       if [[ -n "$result_line" ]]; then
-        response=$(echo "$result_line" | jq -r '.result // "No result text"' 2>/dev/null || echo "Could not parse result")
+        # Validate: check for is_error field (Qwen-Code specific)
+        local is_error
+        is_error=$(echo "$result_line" | jq -r '.is_error // false' 2>/dev/null || echo "false")
+        if [[ "$is_error" == "true" ]]; then
+          response=$(echo "$result_line" | jq -r '.result // "Qwen-Code reported an error"' 2>/dev/null || echo "Qwen-Code reported an error")
+        else
+          response=$(echo "$result_line" | jq -r '.result // ""' 2>/dev/null || echo "")
+        fi
         input_tokens=$(echo "$result_line" | jq -r '.usage.input_tokens // 0' 2>/dev/null || echo "0")
         output_tokens=$(echo "$result_line" | jq -r '.usage.output_tokens // 0' 2>/dev/null || echo "0")
       fi
 
-      # Fallback when no response text was parsed, similar to OpenCode behavior
+      # Fallback 1: Try assistant message content array (Qwen format)
+      if [[ -z "$response" ]]; then
+        local assistant_msg
+        assistant_msg=$(echo "$result" | grep '"type":"assistant"' | tail -1)
+        if [[ -n "$assistant_msg" ]]; then
+          response=$(echo "$assistant_msg" | jq -r '.message.content[0].text // .message.content // ""' 2>/dev/null || echo "")
+        fi
+      fi
+
+      # Fallback 2: Try extracting any text content from the stream
+      if [[ -z "$response" ]]; then
+        response=$(echo "$result" | grep -o '"text":"[^"]*"' | tail -1 | sed 's/"text":"//;s/"$//' 2>/dev/null || echo "")
+      fi
+
+      # Fallback 3: Check for plain text output (non-JSON format)
+      if [[ -z "$response" ]] && ! echo "$result" | grep -q '"type"'; then
+        local first_line
+        first_line=$(echo "$result" | head -1)
+        if [[ -n "$first_line" ]] && [[ ! "$first_line" =~ ^\{ ]]; then
+          response="$result"
+        fi
+      fi
+
+      # Final fallback
       if [[ -z "$response" ]]; then
         response="Task completed"
       fi
