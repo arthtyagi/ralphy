@@ -24,6 +24,7 @@ MAX_RETRIES=3
 RETRY_DELAY=5
 AI_TIMEOUT=600  # 10-minute timeout for AI commands (in seconds)
 VERBOSE=false
+RESUME=false
 
 # Git branch options
 BRANCH_PER_TASK=false
@@ -162,6 +163,7 @@ ${BOLD}EXECUTION OPTIONS:${RESET}
   --max-retries N     Max retries per task on failure (default: 3)
   --retry-delay N     Seconds between retries (default: 5)
   --timeout N         AI command timeout in seconds (default: 600)
+  --resume            Resume from last checkpoint (skip completed iterations)
   --dry-run           Show what would be done without executing
 
 ${BOLD}PARALLEL EXECUTION:${RESET}
@@ -274,6 +276,10 @@ parse_args() {
       --timeout)
         AI_TIMEOUT="${2:-600}"
         shift 2
+        ;;
+      --resume)
+        RESUME=true
+        shift
         ;;
       --parallel)
         PARALLEL=true
@@ -2238,6 +2244,7 @@ main() {
   [[ "$PARALLEL" == true ]] && mode_parts+=("parallel:$MAX_PARALLEL")
   [[ "$BRANCH_PER_TASK" == true ]] && mode_parts+=("branch-per-task")
   [[ "$CREATE_PR" == true ]] && mode_parts+=("create-pr")
+  [[ "$RESUME" == true ]] && mode_parts+=("resume")
   [[ $MAX_ITERATIONS -gt 0 ]] && mode_parts+=("max:$MAX_ITERATIONS")
   
   if [[ ${#mode_parts[@]} -gt 0 ]]; then
@@ -2252,6 +2259,18 @@ main() {
     show_summary
     notify_done
     exit 0
+  fi
+
+  # Handle --resume: skip completed iterations
+  if [[ "$RESUME" == true ]]; then
+    local checkpoint_val
+    checkpoint_val=$(read_checkpoint)
+    if [[ "$checkpoint_val" -gt 0 ]]; then
+      iteration=$checkpoint_val
+      log_info "Resuming from checkpoint: skipping first $checkpoint_val iteration(s)"
+    else
+      log_info "No checkpoint found, starting from beginning"
+    fi
   fi
 
   # Sequential main loop

@@ -12,5 +12,5 @@ No new features. No refactoring for its own sake.
 - [x] Add `--timeout N` flag to override default AI command timeout (default 600 seconds)
 - [x] In parallel mode, use agent-specific progress files (progress-agent-N.txt) to prevent race conditions
 - [x] Add checkpoint file (.ralphy-checkpoint) that saves iteration count after each task completion
-- [ ] Add `--resume` flag that reads .ralphy-checkpoint and skips already-completed iterations
+- [x] Add `--resume` flag that reads .ralphy-checkpoint and skips already-completed iterations
 - [ ] Validate Qwen-Code output format matches expected stream-json structure or add fallback parsing
