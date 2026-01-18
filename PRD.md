@@ -11,6 +11,6 @@ No new features. No refactoring for its own sake.
 - [x] Fix ShellCheck SC2086 on line 702: change `$draft_flag` to `${draft_flag:+"$draft_flag"}`
 - [x] Add `--timeout N` flag to override default AI command timeout (default 600 seconds)
 - [x] In parallel mode, use agent-specific progress files (progress-agent-N.txt) to prevent race conditions
-- [ ] Add checkpoint file (.ralphy-checkpoint) that saves iteration count after each task completion
+- [x] Add checkpoint file (.ralphy-checkpoint) that saves iteration count after each task completion
 - [ ] Add `--resume` flag that reads .ralphy-checkpoint and skips already-completed iterations
 - [ ] Validate Qwen-Code output format matches expected stream-json structure or add fallback parsing

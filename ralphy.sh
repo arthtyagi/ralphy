@@ -72,6 +72,7 @@ declare -a parallel_pids=()
 declare -a task_branches=()
 WORKTREE_BASE=""  # Base directory for parallel agent worktrees
 ORIGINAL_DIR=""   # Original working directory (for worktree operations)
+CHECKPOINT_FILE=".ralphy-checkpoint"  # Saves iteration count for --resume
 
 # ============================================
 # UTILITY FUNCTIONS
@@ -102,6 +103,35 @@ log_debug() {
 # Slugify text for branch names
 slugify() {
   echo "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g' | sed -E 's/^-|-$//g' | cut -c1-50
+}
+
+# ============================================
+# CHECKPOINT FUNCTIONS
+# ============================================
+
+save_checkpoint() {
+  local completed_iteration=$1
+  echo "$completed_iteration" > "$CHECKPOINT_FILE"
+  log_debug "Checkpoint saved: iteration $completed_iteration"
+}
+
+read_checkpoint() {
+  if [[ -f "$CHECKPOINT_FILE" ]]; then
+    local saved_iteration
+    saved_iteration=$(cat "$CHECKPOINT_FILE" 2>/dev/null | tr -d '[:space:]')
+    if [[ "$saved_iteration" =~ ^[0-9]+$ ]]; then
+      echo "$saved_iteration"
+      return 0
+    fi
+  fi
+  echo "0"
+}
+
+clear_checkpoint() {
+  if [[ -f "$CHECKPOINT_FILE" ]]; then
+    rm -f "$CHECKPOINT_FILE"
+    log_debug "Checkpoint cleared"
+  fi
 }
 
 # ============================================
@@ -1324,16 +1354,19 @@ run_single_task() {
     # Return to base branch
     return_to_base_branch
 
+    # Save checkpoint after successful task completion
+    save_checkpoint "$task_num"
+
     # Check for completion - verify by actually counting remaining tasks
     local remaining_count
     remaining_count=$(count_remaining_tasks | tr -d '[:space:]' | head -1)
     remaining_count=${remaining_count:-0}
     [[ "$remaining_count" =~ ^[0-9]+$ ]] || remaining_count=0
-    
+
     if [[ "$remaining_count" -eq 0 ]]; then
       return 2  # All tasks actually complete
     fi
-    
+
     # AI might claim completion but tasks remain - continue anyway
     if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
       log_debug "AI claimed completion but $remaining_count tasks remain, continuing..."
@@ -2215,6 +2248,7 @@ main() {
   # Run in parallel or sequential mode
   if [[ "$PARALLEL" == true ]]; then
     run_parallel_tasks
+    clear_checkpoint
     show_summary
     notify_done
     exit 0
@@ -2236,6 +2270,7 @@ main() {
         ;;
       2)
         # All tasks complete
+        clear_checkpoint
         show_summary
         notify_done
         exit 0
