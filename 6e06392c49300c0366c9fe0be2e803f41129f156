@@ -1,0 +1,29 @@
+ralphy.sh
+  eef6f2705b335233 708
+PRD.md
+  eef6f2705b335233 11
+progress.txt
+  eef6f2705b335233 3
+tests/shellcheck-fixes.bats
+  eef6f2705b335233 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "6e06392c49300c0366c9fe0be2e803f41129f156",
+  "prompts": {
+    "eef6f2705b335233": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "971490cc-1cba-49d6-8687-9b669a1aea3f",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 18,
+      "total_deletions": 2,
+      "accepted_lines": 18,
+      "overriden_lines": 0
+    }
+  }
+}
