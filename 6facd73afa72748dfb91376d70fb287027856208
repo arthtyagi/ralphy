@@ -1,0 +1,43 @@
+PRD.md
+  bf1afb43db383ce7 20
+  ffdd7c59f0687c29 17-19,21
+progress.txt
+  bf1afb43db383ce7 9
+ralphy.sh
+  bf1afb43db383ce7 2287-2290
+tests/resume.bats
+  bf1afb43db383ce7 64-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "6facd73afa72748dfb91376d70fb287027856208",
+  "prompts": {
+    "bf1afb43db383ce7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2051ccca-fcde-44c7-808b-720b238d10ff",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 29,
+      "total_deletions": 2,
+      "accepted_lines": 28,
+      "overriden_lines": 0
+    },
+    "ffdd7c59f0687c29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "opencode-transcript-ses_43304eba5ffetVNYNmvs8aj6m1-5d70a5ee-ef75-4ff9-a9dc-5c38b906a08a",
+        "model": "unknown"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 0,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}
