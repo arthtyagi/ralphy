@@ -2284,6 +2284,10 @@ main() {
 
   # Run in parallel or sequential mode
   if [[ "$PARALLEL" == true ]]; then
+    # Warn if --resume is also set (resume is ignored in parallel mode)
+    if [[ "$RESUME" == true ]]; then
+      log_warn "--resume is ignored when running in --parallel mode"
+    fi
     run_parallel_tasks
     clear_checkpoint
     show_summary

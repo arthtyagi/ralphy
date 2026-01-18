@@ -61,3 +61,25 @@
   [[ "$output" == *'--resume'* ]]
   [[ "$output" == *'checkpoint'* ]]
 }
+
+@test "--resume with --parallel shows warning" {
+  run grep -A 5 'if \[\[ "\$PARALLEL" == true \]\]; then' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'RESUME" == true'* ]]
+  [[ "$output" == *'log_warn'* ]]
+  [[ "$output" == *'--resume is ignored'* ]]
+}
+
+@test "warning message mentions parallel mode" {
+  run grep 'resume is ignored' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'--parallel mode'* ]]
+}
+
+@test "resume warning appears before run_parallel_tasks" {
+  # Verify the warning check appears after the PARALLEL check but before run_parallel_tasks
+  run awk '/if \[\[ "\$PARALLEL" == true \]\]/,/run_parallel_tasks/' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'RESUME'* ]]
+  [[ "$output" == *'log_warn'* ]]
+}
