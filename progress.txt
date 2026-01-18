@@ -1,0 +1,1 @@
+2026-01-18: Bumped VERSION from 3.1.0 to 3.2.0 on line 15 of ralphy.sh. Added BATS test suite in tests/version.bats to verify version variable and --version flag output. Tests pass. Linting passes.
