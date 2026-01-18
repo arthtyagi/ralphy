@@ -1,0 +1,29 @@
+tests/parallel-progress.bats
+  9f398b2c1844f838 1-44
+progress.txt
+  9f398b2c1844f838 5
+PRD.md
+  9f398b2c1844f838 13
+ralphy.sh
+  9f398b2c1844f838 1452-1455,1464,2074-2077,2081-2106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "9f90f1415674057dbd9bb4c90510e873c08dd6d2",
+  "prompts": {
+    "9f398b2c1844f838": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70fd6ea4-85a0-4adb-897b-8043bda0d00f",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 89,
+      "total_deletions": 12,
+      "accepted_lines": 83,
+      "overriden_lines": 0
+    }
+  }
+}
