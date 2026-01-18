@@ -25,6 +25,7 @@ RETRY_DELAY=5
 AI_TIMEOUT=600  # 10-minute timeout for AI commands (in seconds)
 VERBOSE=false
 RESUME=false
+AI_MODEL=""  # Model to pass to underlying AI CLI
 
 # Git branch options
 BRANCH_PER_TASK=false
@@ -163,6 +164,7 @@ ${BOLD}EXECUTION OPTIONS:${RESET}
   --max-retries N     Max retries per task on failure (default: 3)
   --retry-delay N     Seconds between retries (default: 5)
   --timeout N         AI command timeout in seconds (default: 600)
+  --model MODEL       Model name to pass to underlying AI CLI
   --resume            Resume from last checkpoint (skip completed iterations)
   --dry-run           Show what would be done without executing
 
@@ -280,6 +282,10 @@ parse_args() {
       --resume)
         RESUME=true
         shift
+        ;;
+      --model)
+        AI_MODEL="${2:-}"
+        shift 2
         ;;
       --parallel)
         PARALLEL=true
@@ -974,6 +980,8 @@ run_ai_command() {
   local output_file=$2
   local timeout_cmd
   timeout_cmd=$(get_timeout_cmd)
+  local model_flag=""
+  [[ -n "$AI_MODEL" ]] && model_flag="--model $AI_MODEL"
 
   case "$AI_ENGINE" in
     opencode)
@@ -981,10 +989,12 @@ run_ai_command() {
       if [[ -n "$timeout_cmd" ]]; then
         OPENCODE_PERMISSION='{"*":"allow"}' "$timeout_cmd" "$AI_TIMEOUT" opencode run \
           --format json \
+          ${model_flag:+$model_flag} \
           "$prompt" > "$output_file" 2>&1 &
       else
         OPENCODE_PERMISSION='{"*":"allow"}' opencode run \
           --format json \
+          ${model_flag:+$model_flag} \
           "$prompt" > "$output_file" 2>&1 &
       fi
       ;;
@@ -993,10 +1003,12 @@ run_ai_command() {
       if [[ -n "$timeout_cmd" ]]; then
         "$timeout_cmd" "$AI_TIMEOUT" agent --print --force \
           --output-format stream-json \
+          ${model_flag:+$model_flag} \
           "$prompt" > "$output_file" 2>&1 &
       else
         agent --print --force \
           --output-format stream-json \
+          ${model_flag:+$model_flag} \
           "$prompt" > "$output_file" 2>&1 &
       fi
       ;;
@@ -1005,10 +1017,12 @@ run_ai_command() {
       if [[ -n "$timeout_cmd" ]]; then
         "$timeout_cmd" "$AI_TIMEOUT" qwen --output-format stream-json \
           --approval-mode yolo \
+          ${model_flag:+$model_flag} \
           -p "$prompt" > "$output_file" 2>&1 &
       else
         qwen --output-format stream-json \
           --approval-mode yolo \
+          ${model_flag:+$model_flag} \
           -p "$prompt" > "$output_file" 2>&1 &
       fi
       ;;
@@ -1018,11 +1032,13 @@ run_ai_command() {
       if [[ -n "$timeout_cmd" ]]; then
         "$timeout_cmd" "$AI_TIMEOUT" codex exec --full-auto \
           --json \
+          ${model_flag:+$model_flag} \
           --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
           "$prompt" > "$output_file" 2>&1 &
       else
         codex exec --full-auto \
           --json \
+          ${model_flag:+$model_flag} \
           --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
           "$prompt" > "$output_file" 2>&1 &
       fi
@@ -1033,11 +1049,13 @@ run_ai_command() {
         "$timeout_cmd" "$AI_TIMEOUT" claude --dangerously-skip-permissions \
           --verbose \
           --output-format stream-json \
+          ${model_flag:+$model_flag} \
           -p "$prompt" > "$output_file" 2>&1 &
       else
         claude --dangerously-skip-permissions \
           --verbose \
           --output-format stream-json \
+          ${model_flag:+$model_flag} \
           -p "$prompt" > "$output_file" 2>&1 &
       fi
       ;;
@@ -1544,9 +1562,11 @@ Focus only on implementing: $task_name"
   local result=""
   local success=false
   local retry=0
-  
+
   local timeout_cmd
   timeout_cmd=$(get_timeout_cmd)
+  local model_flag=""
+  [[ -n "$AI_MODEL" ]] && model_flag="--model $AI_MODEL"
 
   while [[ $retry -lt $MAX_RETRIES ]]; do
     case "$AI_ENGINE" in
@@ -1556,6 +1576,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             OPENCODE_PERMISSION='{"*":"allow"}' "$timeout_cmd" "$AI_TIMEOUT" opencode run \
               --format json \
+              ${model_flag:+$model_flag} \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         else
@@ -1563,6 +1584,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             OPENCODE_PERMISSION='{"*":"allow"}' opencode run \
               --format json \
+              ${model_flag:+$model_flag} \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         fi
@@ -1573,6 +1595,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             "$timeout_cmd" "$AI_TIMEOUT" agent --print --force \
               --output-format stream-json \
+              ${model_flag:+$model_flag} \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         else
@@ -1580,6 +1603,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             agent --print --force \
               --output-format stream-json \
+              ${model_flag:+$model_flag} \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         fi
@@ -1590,6 +1614,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             "$timeout_cmd" "$AI_TIMEOUT" qwen --output-format stream-json \
               --approval-mode yolo \
+              ${model_flag:+$model_flag} \
               -p "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         else
@@ -1597,6 +1622,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             qwen --output-format stream-json \
               --approval-mode yolo \
+              ${model_flag:+$model_flag} \
               -p "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         fi
@@ -1609,6 +1635,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             "$timeout_cmd" "$AI_TIMEOUT" codex exec --full-auto \
               --json \
+              ${model_flag:+$model_flag} \
               --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
@@ -1617,6 +1644,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             codex exec --full-auto \
               --json \
+              ${model_flag:+$model_flag} \
               --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
@@ -1628,6 +1656,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             "$timeout_cmd" "$AI_TIMEOUT" claude --dangerously-skip-permissions \
               --verbose \
+              ${model_flag:+$model_flag} \
               -p "$prompt" \
               --output-format stream-json
           ) > "$tmpfile" 2>>"$log_file"
@@ -1636,6 +1665,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             claude --dangerously-skip-permissions \
               --verbose \
+              ${model_flag:+$model_flag} \
               -p "$prompt" \
               --output-format stream-json
           ) > "$tmpfile" 2>>"$log_file"
@@ -1754,7 +1784,7 @@ run_parallel_tasks() {
   log_info "Base branch: $BASE_BRANCH"
   
   # Export variables needed by subshell agents
-  export AI_ENGINE MAX_RETRIES RETRY_DELAY PRD_SOURCE PRD_FILE CREATE_PR PR_DRAFT
+  export AI_ENGINE MAX_RETRIES RETRY_DELAY PRD_SOURCE PRD_FILE CREATE_PR PR_DRAFT AI_MODEL AI_TIMEOUT
   
   local batch_num=0
   local completed_branches=()
@@ -2275,6 +2305,7 @@ main() {
   [[ "$BRANCH_PER_TASK" == true ]] && mode_parts+=("branch-per-task")
   [[ "$CREATE_PR" == true ]] && mode_parts+=("create-pr")
   [[ "$RESUME" == true ]] && mode_parts+=("resume")
+  [[ -n "$AI_MODEL" ]] && mode_parts+=("model:$AI_MODEL")
   [[ $MAX_ITERATIONS -gt 0 ]] && mode_parts+=("max:$MAX_ITERATIONS")
   
   if [[ ${#mode_parts[@]} -gt 0 ]]; then

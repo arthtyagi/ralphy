@@ -18,4 +18,4 @@ No new features. No refactoring for its own sake.
 ## Tasks (Round 2 - Issues Found)
 
 - [x] Add warning when `--resume` and `--parallel` are used together (resume is ignored in parallel mode)
-- [ ] Add `--model MODEL` flag to pass model selection to underlying AI CLI
+- [x] Add `--model MODEL` flag to pass model selection to underlying AI CLI
