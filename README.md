@@ -2,56 +2,47 @@
 
 ![Ralphy](assets/ralphy.jpeg)
 
-An autonomous AI coding assistant that works through tasks until everything is complete.
+Autonomous AI coding loop. Runs AI agents on tasks until done.
 
-## Two Ways to Use
-
-### Quick Task
-```bash
-ralphy "add a login button to the header"
-```
-Just tell it what to do. No setup needed.
-
-### Task List (PRD)
-```bash
-./ralphy.sh
-```
-Works through a checklist in `PRD.md` until all tasks are done.
-
-## Getting Started
+## Quick Start
 
 ```bash
-# Clone and setup
 git clone https://github.com/michaelshimeles/ralphy.git
-cd ralphy
-chmod +x ralphy.sh
+cd ralphy && chmod +x ralphy.sh
 
-# Option 1: Quick task
-./ralphy.sh "add dark mode toggle"
+# Single task
+./ralphy.sh "add login button"
 
-# Option 2: Create a task list
-cat > PRD.md << 'EOF'
-## Tasks
-- [ ] Create user authentication
-- [ ] Add dashboard page
-- [ ] Build API endpoints
-EOF
-
-./ralphy.sh
+# Or use a task list
+./ralphy.sh --prd PRD.md
 ```
 
-## Project Config (Optional)
+## Two Modes
 
-Set up project-specific rules and context:
+**Single task** - just tell it what to do:
+```bash
+./ralphy.sh "add dark mode"
+./ralphy.sh "fix the auth bug"
+```
+
+**Task list** - work through a PRD:
+```bash
+./ralphy.sh              # uses PRD.md
+./ralphy.sh --prd tasks.md
+```
+
+## Project Config
+
+Optional. Stores rules the AI must follow.
 
 ```bash
-./ralphy.sh --init
+./ralphy.sh --init              # auto-detects project settings
+./ralphy.sh --config            # view config
+./ralphy.sh --add-rule "use TypeScript strict mode"
 ```
 
-This creates `.ralphy/` with auto-detected settings:
-
+Creates `.ralphy/config.yaml`:
 ```yaml
-# .ralphy/config.yaml
 project:
   name: "my-app"
   language: "TypeScript"
@@ -60,10 +51,11 @@ project:
 commands:
   test: "npm test"
   lint: "npm run lint"
+  build: "npm run build"
 
 rules:
-  - "Use server actions instead of API routes"
-  - "Follow the error handling pattern in src/utils/errors.ts"
+  - "use server actions not API routes"
+  - "follow error pattern in src/utils/errors.ts"
 
 boundaries:
   never_touch:
@@ -71,17 +63,7 @@ boundaries:
     - "*.lock"
 ```
 
-Your rules apply to every task, whether quick or from a PRD.
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `ralphy "task"` | Run a single task |
-| `ralphy --init` | Setup project config |
-| `ralphy --config` | View current config |
-| `ralphy --add-rule "rule"` | Add a rule |
-| `ralphy --no-commit` | Don't auto-commit |
+Rules apply to all tasks (single or PRD).
 
 ## AI Engines
 
@@ -96,32 +78,30 @@ Your rules apply to every task, whether quick or from a PRD.
 
 ## Task Sources
 
-### Markdown (default)
+**Markdown** (default):
 ```bash
 ./ralphy.sh --prd PRD.md
 ```
-
 ```markdown
 ## Tasks
-- [ ] First task
-- [ ] Second task
-- [x] Done (skipped)
+- [ ] create auth
+- [ ] add dashboard
+- [x] done task (skipped)
 ```
 
-### YAML
+**YAML**:
 ```bash
 ./ralphy.sh --yaml tasks.yaml
 ```
-
 ```yaml
 tasks:
-  - title: First task
+  - title: create auth
     completed: false
-  - title: Second task
+  - title: add dashboard
     completed: false
 ```
 
-### GitHub Issues
+**GitHub Issues**:
 ```bash
 ./ralphy.sh --github owner/repo
 ./ralphy.sh --github owner/repo --github-label "ready"
@@ -129,108 +109,124 @@ tasks:
 
 ## Parallel Execution
 
-Run multiple agents at once:
-
 ```bash
-./ralphy.sh --parallel                    # 3 agents
-./ralphy.sh --parallel --max-parallel 5   # 5 agents
+./ralphy.sh --parallel                  # 3 agents default
+./ralphy.sh --parallel --max-parallel 5 # 5 agents
 ```
 
-Each agent gets its own git worktree and branch:
-
+Each agent gets isolated worktree + branch:
 ```
-Agent 1 → worktree: /tmp/xxx/agent-1 → branch: ralphy/agent-1-create-user-model
-Agent 2 → worktree: /tmp/xxx/agent-2 → branch: ralphy/agent-2-add-api-endpoints
-Agent 3 → worktree: /tmp/xxx/agent-3 → branch: ralphy/agent-3-setup-database
+Agent 1 → /tmp/xxx/agent-1 → ralphy/agent-1-create-auth
+Agent 2 → /tmp/xxx/agent-2 → ralphy/agent-2-add-dashboard
+Agent 3 → /tmp/xxx/agent-3 → ralphy/agent-3-build-api
 ```
 
-Without `--create-pr`, branches auto-merge back. With `--create-pr`, each task gets its own PR.
+Without `--create-pr`: auto-merges back, AI resolves conflicts.
+With `--create-pr`: keeps branches, creates PRs.
 
-### YAML Parallel Groups
-
-Control which tasks run together:
-
+**YAML parallel groups** - control execution order:
 ```yaml
 tasks:
   - title: Create User model
     parallel_group: 1
   - title: Create Post model
-    parallel_group: 1  # Runs with User model
+    parallel_group: 1  # same group = runs together
   - title: Add relationships
-    parallel_group: 2  # Runs after group 1
+    parallel_group: 2  # runs after group 1
 ```
 
 ## Branch Workflow
 
 ```bash
-./ralphy.sh --branch-per-task             # Feature branch per task
-./ralphy.sh --branch-per-task --create-pr # Auto-create PRs
-./ralphy.sh --branch-per-task --draft-pr  # Draft PRs
+./ralphy.sh --branch-per-task                # branch per task
+./ralphy.sh --branch-per-task --create-pr    # + create PRs
+./ralphy.sh --branch-per-task --draft-pr     # + draft PRs
+./ralphy.sh --base-branch main               # branch from main
 ```
 
-Branch naming: `ralphy/<task-name-slug>`
+Branch naming: `ralphy/<task-slug>`
+
+## Options
+
+| Flag | What it does |
+|------|--------------|
+| `--prd FILE` | task file (default: PRD.md) |
+| `--yaml FILE` | YAML task file |
+| `--github REPO` | use GitHub issues |
+| `--github-label TAG` | filter issues by label |
+| `--parallel` | run parallel |
+| `--max-parallel N` | max agents (default: 3) |
+| `--branch-per-task` | branch per task |
+| `--base-branch NAME` | base branch |
+| `--create-pr` | create PRs |
+| `--draft-pr` | draft PRs |
+| `--no-tests` | skip tests |
+| `--no-lint` | skip lint |
+| `--fast` | skip tests + lint |
+| `--no-commit` | don't auto-commit |
+| `--max-iterations N` | stop after N tasks |
+| `--max-retries N` | retries per task (default: 3) |
+| `--retry-delay N` | seconds between retries |
+| `--dry-run` | preview only |
+| `-v, --verbose` | debug output |
+| `--init` | setup .ralphy/ config |
+| `--config` | show config |
+| `--add-rule "rule"` | add rule to config |
 
 ## Requirements
 
 **Required:**
-- One of: [Claude Code](https://github.com/anthropics/claude-code), [OpenCode](https://opencode.ai/docs/), Codex, [Cursor](https://cursor.com), [Qwen-Code](https://github.com/anthropics/qwen-code), or [Factory Droid](https://docs.factory.ai/cli/getting-started/quickstart)
+- AI CLI: [Claude Code](https://github.com/anthropics/claude-code), [OpenCode](https://opencode.ai/docs/), [Cursor](https://cursor.com), Codex, Qwen-Code, or [Factory Droid](https://docs.factory.ai/cli/getting-started/quickstart)
 - `jq`
 
 **Optional:**
-- `yq` - for YAML task files
-- `gh` - for GitHub Issues or `--create-pr`
+- `yq` - for YAML tasks
+- `gh` - for GitHub issues / `--create-pr`
+- `bc` - for cost calc
 
-## All Options
+## Engine Details
 
-| Flag | Description |
-|------|-------------|
-| `--prd FILE` | Task file (default: PRD.md) |
-| `--yaml FILE` | YAML task file |
-| `--github REPO` | GitHub issues source |
-| `--parallel` | Run tasks in parallel |
-| `--max-parallel N` | Max concurrent agents (default: 3) |
-| `--branch-per-task` | Create branch per task |
-| `--create-pr` | Create pull requests |
-| `--draft-pr` | Create draft PRs |
-| `--no-tests` | Skip tests |
-| `--no-lint` | Skip linting |
-| `--fast` | Skip tests and linting |
-| `--max-iterations N` | Stop after N tasks |
-| `--dry-run` | Preview without executing |
-| `-v, --verbose` | Debug output |
+| Engine | CLI | Permissions | Output |
+|--------|-----|-------------|--------|
+| Claude | `claude` | `--dangerously-skip-permissions` | tokens + cost |
+| OpenCode | `opencode` | `full-auto` | tokens + cost |
+| Codex | `codex` | N/A | tokens |
+| Cursor | `agent` | `--force` | duration |
+| Qwen | `qwen` | `--approval-mode yolo` | tokens |
+| Droid | `droid exec` | `--auto medium` | duration |
 
 ---
 
 ## Changelog
 
 ### v4.0.0
-- **Single-task mode**: `ralphy "add feature"` without needing a PRD
-- **Project config**: `--init` creates `.ralphy/` with rules, boundaries, and auto-detected settings
-- **New commands**: `--config`, `--add-rule`, `--no-commit`
-- Config applies to both single tasks and PRD loop mode
+- single-task mode: `ralphy "task"` without PRD
+- project config: `--init` creates `.ralphy/` with rules + auto-detection
+- new: `--config`, `--add-rule`, `--no-commit`
 
 ### v3.3.0
-- Added Factory Droid support (`--droid`)
+- Factory Droid support (`--droid`)
 
 ### v3.2.0
-- Added Qwen-Code support (`--qwen`)
+- Qwen-Code support (`--qwen`)
 
 ### v3.1.0
-- Added Cursor support (`--cursor`)
-- Improved task completion verification
+- Cursor support (`--cursor`)
+- better task verification
 
 ### v3.0.0
-- Parallel execution with isolated git worktrees
-- Branch-per-task workflow with auto-PR creation
-- Multiple task sources: Markdown, YAML, GitHub Issues
-- YAML parallel groups
+- parallel execution with worktrees
+- branch-per-task + auto-PR
+- YAML + GitHub Issues sources
+- parallel groups
 
 ### v2.0.0
-- Added OpenCode support
-- Retry logic, `--max-iterations`, `--dry-run`
+- OpenCode support
+- retry logic
+- `--max-iterations`, `--dry-run`
 
 ### v1.0.0
-- Initial release
+- initial release
 
 ## License
 
