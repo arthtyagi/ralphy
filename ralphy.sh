@@ -1449,9 +1449,10 @@ run_parallel_agent() {
     cp "$ORIGINAL_DIR/$PRD_FILE" "$worktree_dir/" 2>/dev/null || true
   fi
   
-  # Ensure progress.txt exists in worktree
-  touch "$worktree_dir/progress.txt"
-  
+  # Create agent-specific progress file to prevent race conditions
+  local progress_file="progress-agent-$agent_num.txt"
+  touch "$worktree_dir/$progress_file"
+
   # Build prompt for this specific task
   local prompt="You are working on a specific task. Focus ONLY on this task:
 
@@ -1460,7 +1461,7 @@ TASK: $task_name
 Instructions:
 1. Implement this specific task completely
 2. Write tests if appropriate
-3. Update progress.txt with what you did
+3. Update $progress_file with what you did (NOT progress.txt - each agent has its own file)
 4. Commit your changes with a descriptive message
 
 Do NOT modify PRD.md or mark tasks complete - that will be handled separately.
@@ -2070,8 +2071,39 @@ Be careful to preserve functionality from BOTH branches. The goal is to integrat
       fi
     fi
   fi
-  
+
+  # Merge agent-specific progress files into main progress.txt
+  merge_agent_progress_files
+
   return 0
+}
+
+# Merge all progress-agent-N.txt files into progress.txt
+merge_agent_progress_files() {
+  local progress_files
+  progress_files=$(find . -maxdepth 1 -name 'progress-agent-*.txt' -type f 2>/dev/null | sort -V)
+
+  if [[ -z "$progress_files" ]]; then
+    return 0
+  fi
+
+  echo ""
+  echo "${BOLD}Merging agent progress files into progress.txt...${RESET}"
+
+  # Append each agent's progress to main progress.txt
+  local merged_count=0
+  for pfile in $progress_files; do
+    if [[ -s "$pfile" ]]; then
+      cat "$pfile" >> progress.txt
+      ((merged_count++)) || true
+      log_debug "Merged $pfile"
+    fi
+    rm -f "$pfile"
+  done
+
+  if [[ $merged_count -gt 0 ]]; then
+    echo "  ${GREEN}✓${RESET} Merged $merged_count agent progress file(s)"
+  fi
 }
 
 # ============================================
