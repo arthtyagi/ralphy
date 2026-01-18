@@ -1,0 +1,29 @@
+progress.txt
+  a8503c63a883df84 6
+PRD.md
+  a8503c63a883df84 14
+tests/checkpoint.bats
+  a8503c63a883df84 1-113
+ralphy.sh
+  a8503c63a883df84 75,109-136,1357-1359,1365,1369,2251,2273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "0709bc98bb7399b7380f84d25363493af2eb0534",
+  "prompts": {
+    "a8503c63a883df84": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d94bf878-30a2-4cb8-bcde-2462f1ea1d49",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 157,
+      "total_deletions": 8,
+      "accepted_lines": 152,
+      "overriden_lines": 0
+    }
+  }
+}
