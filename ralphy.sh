@@ -2248,17 +2248,32 @@ merge_agent_progress_files() {
 
   # Append each agent's progress to main progress.txt
   local merged_count=0
+  local failed_files=()
   for pfile in $progress_files; do
     if [[ -s "$pfile" ]]; then
-      cat "$pfile" >> progress.txt
-      ((merged_count++)) || true
-      log_debug "Merged $pfile"
+      if cat "$pfile" >> progress.txt; then
+        ((merged_count++)) || true
+        log_debug "Merged $pfile"
+        rm -f "$pfile"
+      else
+        log_warn "Failed to merge $pfile - keeping source file to prevent data loss"
+        failed_files+=("$pfile")
+      fi
+    else
+      # Empty or non-existent file - safe to remove
+      rm -f "$pfile"
     fi
-    rm -f "$pfile"
   done
 
   if [[ $merged_count -gt 0 ]]; then
     echo "  ${GREEN}✓${RESET} Merged $merged_count agent progress file(s)"
+  fi
+
+  if [[ ${#failed_files[@]} -gt 0 ]]; then
+    echo "  ${YELLOW}⚠${RESET} Failed to merge ${#failed_files[@]} file(s) - source files preserved:"
+    for f in "${failed_files[@]}"; do
+      echo "    - $f"
+    done
   fi
 }
 

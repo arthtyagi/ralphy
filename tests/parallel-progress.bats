@@ -34,7 +34,7 @@
 }
 
 @test "merge_agent_progress_files appends to progress.txt" {
-  run grep -A 15 'merge_agent_progress_files()' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  run grep -A 25 'merge_agent_progress_files()' "$BATS_TEST_DIRNAME/../ralphy.sh"
   [[ "$output" == *'>> progress.txt'* ]]
 }
 
@@ -65,4 +65,34 @@
   # The copy should only occur if the progress file exists and has content
   run grep 'worktree_dir/\$progress_file' "$BATS_TEST_DIRNAME/../ralphy.sh"
   [[ "$output" == *'-s "$worktree_dir/$progress_file"'* ]]
+}
+
+@test "merge_agent_progress_files checks cat success before removing files" {
+  run grep -A 30 'merge_agent_progress_files()' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [[ "$output" == *'if cat "$pfile" >> progress.txt; then'* ]]
+}
+
+@test "merge_agent_progress_files only removes file after successful cat" {
+  run grep -A 30 'merge_agent_progress_files()' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [[ "$output" == *'rm -f "$pfile"'* ]]
+  [[ "$output" == *'if cat "$pfile" >> progress.txt; then'* ]]
+  [[ "$output" == *'((merged_count++)) || true'* ]]
+}
+
+@test "merge_agent_progress_files tracks failed files array" {
+  run grep -A 30 'merge_agent_progress_files()' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [[ "$output" == *'local failed_files=()'* ]]
+  [[ "$output" == *'failed_files+=("$pfile")'* ]]
+}
+
+@test "merge_agent_progress_files logs warning on merge failure" {
+  run grep -A 30 'merge_agent_progress_files()' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [[ "$output" == *'log_warn "Failed to merge $pfile - keeping source file to prevent data loss"'* ]]
+}
+
+@test "merge_agent_progress_files reports failed files count" {
+  run grep -A 45 'merge_agent_progress_files()' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [[ "$output" == *'${#failed_files[@]}'* ]]
+  [[ "$output" == *'Failed to merge'* ]]
+  [[ "$output" == *'source files preserved'* ]]
 }
