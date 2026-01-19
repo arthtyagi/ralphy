@@ -111,3 +111,27 @@
   [ "$status" -eq 0 ]
   [[ "$output" == *'clear_checkpoint'* ]]
 }
+
+@test "save_checkpoint is conditional on pr_created in run_single_task" {
+  run grep -A 3 'pr_created=true' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'if ! create_pull_request'* ]] || [[ "$output" == *'CREATE_PR'* ]]
+}
+
+@test "save_checkpoint only runs when pr_created is true" {
+  run grep -B 2 'save_checkpoint "\$task_num"' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'pr_created'* ]]
+}
+
+@test "PR creation failure sets pr_created to false" {
+  run grep -A 5 'if ! create_pull_request' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'pr_created=false'* ]]
+}
+
+@test "checkpoint not saved message logged when PR fails" {
+  run grep 'checkpoint not saved' "$BATS_TEST_DIRNAME/../ralphy.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'PR creation failed'* ]]
+}

@@ -1417,15 +1417,21 @@ run_single_task() {
     fi
 
     # Create PR if requested
+    local pr_created=true
     if [[ "$CREATE_PR" == true ]] && [[ -n "$branch_name" ]]; then
-      create_pull_request "$branch_name" "$current_task" "Automated implementation by Ralphy"
+      if ! create_pull_request "$branch_name" "$current_task" "Automated implementation by Ralphy"; then
+        pr_created=false
+        log_warn "PR creation failed for task $task_num, checkpoint not saved"
+      fi
     fi
 
     # Return to base branch
     return_to_base_branch
 
-    # Save checkpoint after successful task completion
-    save_checkpoint "$task_num"
+    # Save checkpoint only after verifying PR was created (if PR was requested)
+    if [[ "$pr_created" == true ]]; then
+      save_checkpoint "$task_num"
+    fi
 
     # Check for completion - verify by actually counting remaining tasks
     local remaining_count
@@ -1749,21 +1755,34 @@ Focus only on implementing: $task_name"
     fi
     
     # Create PR if requested
+    local pr_created=true
     if [[ "$CREATE_PR" == true ]]; then
-      (
+      if ! (
         cd "$worktree_dir"
-        git push -u origin "$branch_name" 2>>"$log_file" || true
-        gh pr create \
+        if ! git push -u origin "$branch_name" 2>>"$log_file"; then
+          echo "WARNING: Failed to push branch $branch_name" >> "$log_file"
+          exit 1
+        fi
+        if ! gh pr create \
           --base "$BASE_BRANCH" \
           --head "$branch_name" \
           --title "$task_name" \
           --body "Automated implementation by Ralphy (Agent $agent_num)" \
-          ${PR_DRAFT:+--draft} 2>>"$log_file" || true
-      )
+          ${PR_DRAFT:+--draft} 2>>"$log_file"; then
+          echo "WARNING: Failed to create PR for $branch_name" >> "$log_file"
+          exit 1
+        fi
+      ); then
+        pr_created=false
+      fi
     fi
     
-    # Write success output
-    echo "done" > "$status_file"
+    # Write success output (note: task succeeded even if PR creation failed)
+    if [[ "$pr_created" == true ]]; then
+      echo "done" > "$status_file"
+    else
+      echo "done_no_pr" > "$status_file"
+    fi
     echo "$input_tokens $output_tokens $branch_name" > "$output_file"
 
     # Copy agent progress file to original directory before worktree cleanup

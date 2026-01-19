@@ -27,6 +27,6 @@ No new features. No refactoring for its own sake.
 ## Tasks (Round 4 - Code Review Fixes)
 
 - [x] Handle timeout exit code 124 separately in run_ai_command - log "AI command timed out after N seconds" instead of generic "failed"
-- [ ] Only save checkpoint after verifying PR was actually created (check gh pr create exit code before writing checkpoint)
+- [x] Only save checkpoint after verifying PR was actually created (check gh pr create exit code before writing checkpoint)
 - [ ] Fix model flag quoting in run_ai_command: use proper shell quoting `${model_flag:+"$model_flag"}` pattern
 - [ ] Add data loss protection in merge_agent_progress_files - check if cat succeeds before removing source files
