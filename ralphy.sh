@@ -1300,8 +1300,9 @@ run_single_task() {
     monitor_progress "$tmpfile" "${current_task:0:40}" &
     monitor_pid=$!
 
-    # Wait for AI to finish
-    wait "$ai_pid" 2>/dev/null || true
+    # Wait for AI to finish and capture exit code
+    local ai_exit_code=0
+    wait "$ai_pid" 2>/dev/null || ai_exit_code=$?
 
     # Stop the monitor
     kill "$monitor_pid" 2>/dev/null || true
@@ -1315,6 +1316,21 @@ run_single_task() {
     # Read result
     local result
     result=$(cat "$tmpfile" 2>/dev/null || echo "")
+
+    # Check for timeout (exit code 124 from timeout command)
+    if [[ $ai_exit_code -eq 124 ]]; then
+      ((retry_count++)) || true
+      log_error "AI command timed out after $AI_TIMEOUT seconds (attempt $retry_count/$MAX_RETRIES)"
+      if [[ $retry_count -lt $MAX_RETRIES ]]; then
+        log_info "Retrying in ${RETRY_DELAY}s..."
+        sleep "$RETRY_DELAY"
+        continue
+      fi
+      rm -f "$tmpfile"
+      tmpfile=""
+      return_to_base_branch
+      return 1
+    fi
 
     # Check for empty response
     if [[ -z "$result" ]]; then
@@ -1672,8 +1688,17 @@ Focus only on implementing: $task_name"
         fi
         ;;
     esac
+    local cmd_exit_code=$?
     
     result=$(cat "$tmpfile" 2>/dev/null || echo "")
+    
+    # Check for timeout (exit code 124 from timeout command)
+    if [[ $cmd_exit_code -eq 124 ]]; then
+      ((retry++)) || true
+      echo "AI command timed out after $AI_TIMEOUT seconds (attempt $retry/$MAX_RETRIES)" >> "$log_file"
+      sleep "$RETRY_DELAY"
+      continue
+    fi
     
     if [[ -n "$result" ]]; then
       local error_msg
