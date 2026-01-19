@@ -1,0 +1,96 @@
+ralphy.sh
+  0b391be953b78568 1420,1422-1425,1431-1432,1434
+  28a525a3956ece13 1760,1775,1777
+  babef20c62dae2e9 1758,1762-1766,1771-1774,1776,1780-1781,1783-1785
+progress.txt
+  324e91c9aa988168 13
+tests/checkpoint.bats
+  d529171dff9a2bf4 114-137
+PRD.md
+  6b4028a16251bd74 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "4aa00f99863dbb86a3a62a777a3b298f589db61a",
+  "prompts": {
+    "0b391be953b78568": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "opencode-transcript-ses_42aedd99bffeCMx5SM4pWenUWU-72831626-301e-4c14-9757-0a6252d6d311",
+        "model": "unknown"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 9,
+      "total_deletions": 3,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    },
+    "28a525a3956ece13": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "opencode-transcript-ses_42aedd99bffeCMx5SM4pWenUWU-28b7a846-f665-450b-9492-1844c3bc4074",
+        "model": "unknown"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 3,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    },
+    "324e91c9aa988168": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "opencode-transcript-ses_42aedd99bffeCMx5SM4pWenUWU-a7be9377-a1d4-4efd-aa75-73b17b7c1369",
+        "model": "unknown"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "6b4028a16251bd74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "opencode-transcript-ses_42aedd99bffeCMx5SM4pWenUWU-1d611c4e-c3ed-4249-a4f5-4ed12f9e94bb",
+        "model": "unknown"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "babef20c62dae2e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "opencode-transcript-ses_42aedd99bffeCMx5SM4pWenUWU-1b1496fe-6f3b-4f56-ab28-6ef5e492ffc6",
+        "model": "unknown"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 17,
+      "total_deletions": 5,
+      "accepted_lines": 16,
+      "overriden_lines": 0
+    },
+    "d529171dff9a2bf4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "opencode-transcript-ses_42aedd99bffeCMx5SM4pWenUWU-c650bc16-387d-4448-8057-9c514c70d3e5",
+        "model": "unknown"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 24,
+      "total_deletions": 0,
+      "accepted_lines": 24,
+      "overriden_lines": 0
+    }
+  }
+}
