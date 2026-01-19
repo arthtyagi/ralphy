@@ -554,7 +554,17 @@ mark_task_complete_markdown() {
   # - Escape: [ ] \ . * ^ $ /
   # - NOT escape: { } ( ) + ? | (these are literal in BRE)
   local escaped_task
-  escaped_task=$(printf '%s\n' "$task" | sed 's/[[\.*^$/]/\\&/g')
+  escaped_task=$(printf '%s\n' "$task" | sed 's/[][\.*^$/]/\\&/g')
+  local task_has_bracket=false
+  [[ "$task" == *"]"* ]] && task_has_bracket=true
+  local escaped_has_backslash_bracket=false
+  [[ "$escaped_task" == *"\\]"* ]] && escaped_has_backslash_bracket=true
+  if [[ "$task_has_bracket" == true ]]; then
+    #region agent log
+    local debug_ts=$(( $(date +%s) * 1000 ))
+    printf '%s\n' "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H2\",\"location\":\"ralphy.sh:mark_task_complete_markdown\",\"message\":\"escaped_task_check\",\"data\":{\"task_len\":${#task},\"escaped_len\":${#escaped_task},\"task_has_bracket\":$task_has_bracket,\"escaped_has_backslash_bracket\":$escaped_has_backslash_bracket},\"timestamp\":$debug_ts}" >> "/Users/arthtyagi/ralphy/.cursor/debug.log" 2>/dev/null || true
+    #endregion agent log
+  fi
   sed -i.bak "s/^- \[ \] ${escaped_task}/- [x] ${escaped_task}/" "$PRD_FILE"
   rm -f "${PRD_FILE}.bak"
 }
@@ -1527,6 +1537,11 @@ run_parallel_agent() {
   local status_file="$4"
   local log_file="$5"
   
+  #region agent log
+  local debug_ts=$(( $(date +%s) * 1000 ))
+  printf '%s\n' "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H3\",\"location\":\"ralphy.sh:run_parallel_agent:entry\",\"message\":\"entry\",\"data\":{\"agent_num\":$agent_num,\"create_pr\":\"$CREATE_PR\",\"pr_draft\":\"$PR_DRAFT\"},\"timestamp\":$debug_ts}" >> "/Users/arthtyagi/ralphy/.cursor/debug.log" 2>/dev/null || true
+  #endregion agent log
+  
   echo "setting up" > "$status_file"
   
   # Log setup info
@@ -1757,6 +1772,12 @@ Focus only on implementing: $task_name"
     # Create PR if requested
     local pr_created=true
     if [[ "$CREATE_PR" == true ]]; then
+      local draft_arg=""
+      [[ "$PR_DRAFT" == true ]] && draft_arg="--draft"
+      #region agent log
+      local debug_ts=$(( $(date +%s) * 1000 ))
+      printf '%s\n' "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H3\",\"location\":\"ralphy.sh:run_parallel_agent:pr_create\",\"message\":\"draft_arg\",\"data\":{\"pr_draft\":\"$PR_DRAFT\",\"draft_arg\":\"$draft_arg\"},\"timestamp\":$debug_ts}" >> "/Users/arthtyagi/ralphy/.cursor/debug.log" 2>/dev/null || true
+      #endregion agent log
       if ! (
         cd "$worktree_dir"
         if ! git push -u origin "$branch_name" 2>>"$log_file"; then
@@ -1768,7 +1789,7 @@ Focus only on implementing: $task_name"
           --head "$branch_name" \
           --title "$task_name" \
           --body "Automated implementation by Ralphy (Agent $agent_num)" \
-          ${PR_DRAFT:+--draft} 2>>"$log_file"; then
+          $draft_arg 2>>"$log_file"; then
           echo "WARNING: Failed to create PR for $branch_name" >> "$log_file"
           exit 1
         fi
@@ -1778,12 +1799,18 @@ Focus only on implementing: $task_name"
     fi
     
     # Write success output (note: task succeeded even if PR creation failed)
+    local status_value="done"
     if [[ "$pr_created" == true ]]; then
       echo "done" > "$status_file"
     else
+      status_value="done_no_pr"
       echo "done_no_pr" > "$status_file"
     fi
     echo "$input_tokens $output_tokens $branch_name" > "$output_file"
+    #region agent log
+    local debug_ts=$(( $(date +%s) * 1000 ))
+    printf '%s\n' "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"ralphy.sh:run_parallel_agent:status_written\",\"message\":\"status_written\",\"data\":{\"agent_num\":$agent_num,\"status\":\"$status_value\",\"pr_created\":$pr_created,\"return_value\":0},\"timestamp\":$debug_ts}" >> "/Users/arthtyagi/ralphy/.cursor/debug.log" 2>/dev/null || true
+    #endregion agent log
 
     # Copy agent progress file to original directory before worktree cleanup
     if [[ -s "$worktree_dir/$progress_file" ]]; then
@@ -1950,10 +1977,19 @@ run_parallel_tasks() {
             done)
               ((done_count++)) || true
               ;;
+            done_no_pr)
+              ((done_count++)) || true
+              ;;
             failed)
               ((failed_count++)) || true
               ;;
             *)
+              if [[ "$status" == "done_no_pr" ]]; then
+                #region agent log
+                local debug_ts=$(( $(date +%s) * 1000 ))
+                printf '%s\n' "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"ralphy.sh:run_parallel_tasks:monitor\",\"message\":\"status_unhandled\",\"data\":{\"status\":\"$status\",\"agent_index\":$j,\"done_count\":$done_count,\"failed_count\":$failed_count,\"running\":$running,\"setting_up\":$setting_up},\"timestamp\":$debug_ts}" >> "/Users/arthtyagi/ralphy/.cursor/debug.log" 2>/dev/null || true
+                #endregion agent log
+              fi
               # Check if process is still running
               if kill -0 "$pid" 2>/dev/null; then
                 all_done=false
@@ -1994,11 +2030,21 @@ run_parallel_tasks() {
         local status=$(cat "$status_file" 2>/dev/null || echo "unknown")
         local agent_num=$((iteration - batch_size + j + 1))
 
+        if [[ "$status" == "done_no_pr" ]]; then
+          #region agent log
+          local debug_ts=$(( $(date +%s) * 1000 ))
+          printf '%s\n' "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"ralphy.sh:run_parallel_tasks:results\",\"message\":\"status_unhandled\",\"data\":{\"status\":\"$status\",\"agent_num\":$agent_num},\"timestamp\":$debug_ts}" >> "/Users/arthtyagi/ralphy/.cursor/debug.log" 2>/dev/null || true
+          #endregion agent log
+        fi
+
         local icon color branch_info=""
+        local pr_failed=false
+        [[ "$status" == "done_no_pr" ]] && pr_failed=true
         case "$status" in
-          done)
+          done|done_no_pr)
             icon="✓"
             color="$GREEN"
+            [[ "$pr_failed" == true ]] && color="$YELLOW"
             # Collect tokens and branch name
             local output_data=$(cat "$output_file" 2>/dev/null || echo "0 0")
             local in_tok=$(echo "$output_data" | awk '{print $1}')
@@ -2011,6 +2057,9 @@ run_parallel_tasks() {
             if [[ -n "$branch" ]]; then
               completed_branches+=("$branch")
               branch_info=" → ${CYAN}$branch${RESET}"
+            fi
+            if [[ "$pr_failed" == true ]]; then
+              branch_info="${branch_info} ${YELLOW}(no PR)${RESET}"
             fi
 
             # Mark task complete in PRD
