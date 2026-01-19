@@ -1,0 +1,27 @@
+tests/special-chars.bats
+  3bd7e82ea6ebe804 1-51
+progress-agent-1.txt
+  3bd7e82ea6ebe804 1-34
+ralphy.sh
+  3bd7e82ea6ebe804 557
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "371e5682a07b0361006ea106b85561083c74f664",
+  "prompts": {
+    "3bd7e82ea6ebe804": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a627ed08-c856-48b7-be86-e2e8bc5b35b1",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 86,
+      "total_deletions": 1,
+      "accepted_lines": 86,
+      "overriden_lines": 0
+    }
+  }
+}
