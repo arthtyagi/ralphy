@@ -2,7 +2,7 @@
 
 # ============================================
 # Ralphy - Autonomous AI Coding Loop
-# Supports Claude Code, OpenCode, Codex, Cursor, and Qwen-Code
+# Supports Claude Code, OpenCode, Codex, Cursor, Qwen-Code and Factory Droid
 # Runs until PRD is complete
 # ============================================
 
@@ -12,12 +12,22 @@ set -euo pipefail
 # CONFIGURATION & DEFAULTS
 # ============================================
 
-VERSION="3.2.0"
+VERSION="4.0.0"
+
+# Ralphy config directory
+RALPHY_DIR=".ralphy"
+PROGRESS_FILE="$RALPHY_DIR/progress.txt"
+CONFIG_FILE="$RALPHY_DIR/config.yaml"
+SINGLE_TASK=""
+INIT_MODE=false
+SHOW_CONFIG=false
+ADD_RULE=""
+AUTO_COMMIT=true
 
 # Runtime options
 SKIP_TESTS=false
 SKIP_LINT=false
-AI_ENGINE="claude"  # claude, opencode, cursor, codex, or qwen
+AI_ENGINE="claude"  # claude, opencode, cursor, codex, qwen, or droid
 DRY_RUN=false
 MAX_ITERATIONS=0  # 0 = unlimited
 MAX_RETRIES=3
@@ -72,9 +82,11 @@ iteration=0
 retry_count=0
 declare -a parallel_pids=()
 declare -a task_branches=()
+declare -a integration_branches=()  # Track integration branches for cleanup on interrupt
 WORKTREE_BASE=""  # Base directory for parallel agent worktrees
 ORIGINAL_DIR=""   # Original working directory (for worktree operations)
 CHECKPOINT_FILE=".ralphy-checkpoint"  # Saves iteration count for --resume
+ORIGINAL_BASE_BRANCH=""  # Original base branch before integration branches
 
 # ============================================
 # UTILITY FUNCTIONS
@@ -137,6 +149,454 @@ clear_checkpoint() {
 }
 
 # ============================================
+# BROWNFIELD MODE (.ralphy/ configuration)
+# ============================================
+
+# Initialize .ralphy/ directory with config files
+init_ralphy_config() {
+  if [[ -d "$RALPHY_DIR" ]]; then
+    log_warn "$RALPHY_DIR already exists"
+    REPLY='N'  # Default if read times out or fails
+    read -p "Overwrite config? [y/N] " -n 1 -r -t 30 2>/dev/null || true
+    echo
+    [[ ! $REPLY =~ ^[Yy]$ ]] && exit 0
+  fi
+
+  mkdir -p "$RALPHY_DIR"
+
+  # Smart detection
+  local project_name=""
+  local lang=""
+  local framework=""
+  local test_cmd=""
+  local lint_cmd=""
+  local build_cmd=""
+
+  # Get project name from directory or package.json
+  project_name=$(basename "$PWD")
+
+  if [[ -f "package.json" ]]; then
+    # Get name from package.json if available
+    local pkg_name
+    pkg_name=$(jq -r '.name // ""' package.json 2>/dev/null)
+    [[ -n "$pkg_name" ]] && project_name="$pkg_name"
+
+    # Detect language
+    if [[ -f "tsconfig.json" ]]; then
+      lang="TypeScript"
+    else
+      lang="JavaScript"
+    fi
+
+    # Detect frameworks from dependencies (collect all matches)
+    local deps frameworks=()
+    deps=$(jq -r '(.dependencies // {}) + (.devDependencies // {}) | keys[]' package.json 2>/dev/null || true)
+
+    # Use grep for reliable exact matching
+    echo "$deps" | grep -qx "next" && frameworks+=("Next.js")
+    echo "$deps" | grep -qx "nuxt" && frameworks+=("Nuxt")
+    echo "$deps" | grep -qx "@remix-run/react" && frameworks+=("Remix")
+    echo "$deps" | grep -qx "svelte" && frameworks+=("Svelte")
+    echo "$deps" | grep -qE "@nestjs/" && frameworks+=("NestJS")
+    echo "$deps" | grep -qx "hono" && frameworks+=("Hono")
+    echo "$deps" | grep -qx "fastify" && frameworks+=("Fastify")
+    echo "$deps" | grep -qx "express" && frameworks+=("Express")
+    # Only add React/Vue if no meta-framework detected
+    if [[ ${#frameworks[@]} -eq 0 ]]; then
+      echo "$deps" | grep -qx "react" && frameworks+=("React")
+      echo "$deps" | grep -qx "vue" && frameworks+=("Vue")
+    fi
+
+    # Join frameworks with comma
+    framework=$(IFS=', '; echo "${frameworks[*]}")
+
+    # Detect commands from package.json scripts
+    local scripts
+    scripts=$(jq -r '.scripts // {}' package.json 2>/dev/null)
+
+    # Test command (prefer bun if lockfile exists)
+    if echo "$scripts" | jq -e '.test' >/dev/null 2>&1; then
+      test_cmd="npm test"
+      [[ -f "bun.lockb" ]] && test_cmd="bun test"
+    fi
+
+    # Lint command
+    if echo "$scripts" | jq -e '.lint' >/dev/null 2>&1; then
+      lint_cmd="npm run lint"
+    fi
+
+    # Build command
+    if echo "$scripts" | jq -e '.build' >/dev/null 2>&1; then
+      build_cmd="npm run build"
+    fi
+
+  elif [[ -f "pyproject.toml" ]] || [[ -f "requirements.txt" ]] || [[ -f "setup.py" ]]; then
+    lang="Python"
+    local py_frameworks=()
+    local py_deps=""
+    [[ -f "pyproject.toml" ]] && py_deps=$(cat pyproject.toml 2>/dev/null)
+    [[ -f "requirements.txt" ]] && py_deps+=$(cat requirements.txt 2>/dev/null)
+    echo "$py_deps" | grep -qi "fastapi" && py_frameworks+=("FastAPI")
+    echo "$py_deps" | grep -qi "django" && py_frameworks+=("Django")
+    echo "$py_deps" | grep -qi "flask" && py_frameworks+=("Flask")
+    framework=$(IFS=', '; echo "${py_frameworks[*]}")
+    test_cmd="pytest"
+    lint_cmd="ruff check ."
+
+  elif [[ -f "go.mod" ]]; then
+    lang="Go"
+    test_cmd="go test ./..."
+    lint_cmd="golangci-lint run"
+
+  elif [[ -f "Cargo.toml" ]]; then
+    lang="Rust"
+    test_cmd="cargo test"
+    lint_cmd="cargo clippy"
+    build_cmd="cargo build"
+  fi
+
+  # Show what we detected
+  echo ""
+  echo "${BOLD}Detected:${RESET}"
+  echo "  Project:   ${CYAN}$project_name${RESET}"
+  [[ -n "$lang" ]] && echo "  Language:  ${CYAN}$lang${RESET}"
+  [[ -n "$framework" ]] && echo "  Framework: ${CYAN}$framework${RESET}"
+  [[ -n "$test_cmd" ]] && echo "  Test:      ${CYAN}$test_cmd${RESET}"
+  [[ -n "$lint_cmd" ]] && echo "  Lint:      ${CYAN}$lint_cmd${RESET}"
+  [[ -n "$build_cmd" ]] && echo "  Build:     ${CYAN}$build_cmd${RESET}"
+  echo ""
+
+  # Escape values for safe YAML (double quotes inside strings)
+  yaml_escape() { printf '%s' "$1" | sed 's/"/\\"/g'; }
+
+  # Create config.yaml with detected values
+  cat > "$CONFIG_FILE" << EOF
+# Ralphy Configuration
+# https://github.com/michaelshimeles/ralphy
+
+# Project info (auto-detected, edit if needed)
+project:
+  name: "$(yaml_escape "$project_name")"
+  language: "$(yaml_escape "${lang:-Unknown}")"
+  framework: "$(yaml_escape "${framework:-}")"
+  description: ""  # Add a brief description
+
+# Commands (auto-detected from package.json/pyproject.toml)
+commands:
+  test: "$(yaml_escape "${test_cmd:-}")"
+  lint: "$(yaml_escape "${lint_cmd:-}")"
+  build: "$(yaml_escape "${build_cmd:-}")"
+
+# Rules - instructions the AI MUST follow
+# These are injected into every prompt
+rules: []
+  # Examples:
+  # - "Always use TypeScript strict mode"
+  # - "Follow the error handling pattern in src/utils/errors.ts"
+  # - "All API endpoints must have input validation with Zod"
+  # - "Use server actions instead of API routes in Next.js"
+
+# Boundaries - files/folders the AI should not modify
+boundaries:
+  never_touch: []
+    # Examples:
+    # - "src/legacy/**"
+    # - "migrations/**"
+    # - "*.lock"
+EOF
+
+  # Create progress.txt
+  echo "# Ralphy Progress Log" > "$PROGRESS_FILE"
+  echo "" >> "$PROGRESS_FILE"
+
+  log_success "Created $RALPHY_DIR/"
+  echo ""
+  echo "  ${CYAN}$CONFIG_FILE${RESET}   - Your rules and preferences"
+  echo "  ${CYAN}$PROGRESS_FILE${RESET} - Progress log (auto-updated)"
+  echo ""
+  echo "${BOLD}Next steps:${RESET}"
+  echo "  1. Add rules:  ${CYAN}ralphy --add-rule \"your rule here\"${RESET}"
+  echo "  2. Or edit:    ${CYAN}$CONFIG_FILE${RESET}"
+  echo "  3. Run:        ${CYAN}ralphy \"your task\"${RESET} or ${CYAN}ralphy${RESET} (with PRD.md)"
+}
+
+# Load rules from config.yaml
+load_ralphy_rules() {
+  [[ ! -f "$CONFIG_FILE" ]] && return
+
+  if command -v yq &>/dev/null; then
+    yq -r '.rules // [] | .[]' "$CONFIG_FILE" 2>/dev/null || true
+  fi
+}
+
+# Load boundaries from config.yaml
+load_ralphy_boundaries() {
+  local boundary_type="$1"  # never_touch or always_test
+  [[ ! -f "$CONFIG_FILE" ]] && return
+
+  if command -v yq &>/dev/null; then
+    yq -r ".boundaries.$boundary_type // [] | .[]" "$CONFIG_FILE" 2>/dev/null || true
+  fi
+}
+
+# Show current config
+show_ralphy_config() {
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    log_warn "No config found. Run 'ralphy --init' first."
+    exit 1
+  fi
+
+  echo ""
+  echo "${BOLD}Ralphy Configuration${RESET} ($CONFIG_FILE)"
+  echo ""
+
+  if command -v yq &>/dev/null; then
+    # Project info
+    local name lang framework desc
+    name=$(yq -r '.project.name // "Unknown"' "$CONFIG_FILE" 2>/dev/null)
+    lang=$(yq -r '.project.language // "Unknown"' "$CONFIG_FILE" 2>/dev/null)
+    framework=$(yq -r '.project.framework // ""' "$CONFIG_FILE" 2>/dev/null)
+    desc=$(yq -r '.project.description // ""' "$CONFIG_FILE" 2>/dev/null)
+
+    echo "${BOLD}Project:${RESET}"
+    echo "  Name:      $name"
+    echo "  Language:  $lang"
+    [[ -n "$framework" ]] && echo "  Framework: $framework"
+    [[ -n "$desc" ]] && echo "  About:     $desc"
+    echo ""
+
+    # Commands
+    local test_cmd lint_cmd build_cmd
+    test_cmd=$(yq -r '.commands.test // ""' "$CONFIG_FILE" 2>/dev/null)
+    lint_cmd=$(yq -r '.commands.lint // ""' "$CONFIG_FILE" 2>/dev/null)
+    build_cmd=$(yq -r '.commands.build // ""' "$CONFIG_FILE" 2>/dev/null)
+
+    echo "${BOLD}Commands:${RESET}"
+    [[ -n "$test_cmd" ]] && echo "  Test:  $test_cmd" || echo "  Test:  ${DIM}(not set)${RESET}"
+    [[ -n "$lint_cmd" ]] && echo "  Lint:  $lint_cmd" || echo "  Lint:  ${DIM}(not set)${RESET}"
+    [[ -n "$build_cmd" ]] && echo "  Build: $build_cmd" || echo "  Build: ${DIM}(not set)${RESET}"
+    echo ""
+
+    # Rules
+    echo "${BOLD}Rules:${RESET}"
+    local rules
+    rules=$(yq -r '.rules // [] | .[]' "$CONFIG_FILE" 2>/dev/null)
+    if [[ -n "$rules" ]]; then
+      echo "$rules" | while read -r rule; do
+        echo "  • $rule"
+      done
+    else
+      echo "  ${DIM}(none - add with: ralphy --add-rule \"...\")${RESET}"
+    fi
+    echo ""
+
+    # Boundaries
+    local never_touch
+    never_touch=$(yq -r '.boundaries.never_touch // [] | .[]' "$CONFIG_FILE" 2>/dev/null)
+    if [[ -n "$never_touch" ]]; then
+      echo "${BOLD}Never Touch:${RESET}"
+      echo "$never_touch" | while read -r path; do
+        echo "  • $path"
+      done
+      echo ""
+    fi
+  else
+    # Fallback: just show the file
+    cat "$CONFIG_FILE"
+  fi
+}
+
+# Add a rule to config.yaml
+add_ralphy_rule() {
+  local rule="$1"
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    log_error "No config found. Run 'ralphy --init' first."
+    exit 1
+  fi
+
+  if ! command -v yq &>/dev/null; then
+    log_error "yq is required to add rules. Install from https://github.com/mikefarah/yq"
+    log_info "Or manually edit $CONFIG_FILE"
+    exit 1
+  fi
+
+  # Add rule to the rules array (use env var to avoid YAML injection)
+  RULE="$rule" yq -i '.rules += [env(RULE)]' "$CONFIG_FILE"
+  log_success "Added rule: $rule"
+}
+
+# Load test command from config
+load_test_command() {
+  [[ ! -f "$CONFIG_FILE" ]] && echo "" && return
+
+  if command -v yq &>/dev/null; then
+    yq -r '.commands.test // ""' "$CONFIG_FILE" 2>/dev/null || echo ""
+  else
+    echo ""
+  fi
+}
+
+# Load project context from config.yaml
+load_project_context() {
+  [[ ! -f "$CONFIG_FILE" ]] && return
+
+  if command -v yq &>/dev/null; then
+    local name lang framework desc
+    name=$(yq -r '.project.name // ""' "$CONFIG_FILE" 2>/dev/null)
+    lang=$(yq -r '.project.language // ""' "$CONFIG_FILE" 2>/dev/null)
+    framework=$(yq -r '.project.framework // ""' "$CONFIG_FILE" 2>/dev/null)
+    desc=$(yq -r '.project.description // ""' "$CONFIG_FILE" 2>/dev/null)
+
+    local context=""
+    [[ -n "$name" ]] && context+="Project: $name\n"
+    [[ -n "$lang" ]] && context+="Language: $lang\n"
+    [[ -n "$framework" ]] && context+="Framework: $framework\n"
+    [[ -n "$desc" ]] && context+="Description: $desc\n"
+    echo -e "$context"
+  fi
+}
+
+# Log task to progress file
+log_task_history() {
+  local task="$1"
+  local status="$2"  # completed, failed
+
+  [[ ! -f "$PROGRESS_FILE" ]] && return
+
+  local timestamp
+  timestamp=$(date '+%Y-%m-%d %H:%M')
+  local icon="✓"
+  [[ "$status" == "failed" ]] && icon="✗"
+
+  echo "- [$icon] $timestamp - $task" >> "$PROGRESS_FILE"
+}
+
+# Build prompt with brownfield context
+build_brownfield_prompt() {
+  local task="$1"
+  local prompt=""
+
+  # Add project context if available
+  local context
+  context=$(load_project_context)
+  if [[ -n "$context" ]]; then
+    prompt+="## Project Context
+$context
+
+"
+  fi
+
+  # Add rules if available
+  local rules
+  rules=$(load_ralphy_rules)
+  if [[ -n "$rules" ]]; then
+    prompt+="## Rules (you MUST follow these)
+$rules
+
+"
+  fi
+
+  # Add boundaries
+  local never_touch
+  never_touch=$(load_ralphy_boundaries "never_touch")
+  if [[ -n "$never_touch" ]]; then
+    prompt+="## Boundaries
+Do NOT modify these files/directories:
+$never_touch
+
+"
+  fi
+
+  # Add the task
+  prompt+="## Task
+$task
+
+## Instructions
+1. Implement the task described above
+2. Write tests if appropriate
+3. Ensure the code works correctly"
+
+  # Add commit instruction only if auto-commit is enabled
+  if [[ "$AUTO_COMMIT" == "true" ]]; then
+    prompt+="
+4. Commit your changes with a descriptive message"
+  fi
+
+  prompt+="
+
+Keep changes focused and minimal. Do not refactor unrelated code."
+
+  echo "$prompt"
+}
+
+# Run a single brownfield task
+run_brownfield_task() {
+  local task="$1"
+
+  echo ""
+  echo "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  echo "${BOLD}Task:${RESET} $task"
+  echo "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  echo ""
+
+  local prompt
+  prompt=$(build_brownfield_prompt "$task")
+
+  # Create temp file for output
+  local output_file
+  output_file=$(mktemp)
+
+  log_info "Running with $AI_ENGINE..."
+
+  # Run the AI engine (tee to show output while saving for parsing)
+  case "$AI_ENGINE" in
+    claude)
+      claude --dangerously-skip-permissions \
+        -p "$prompt" 2>&1 | tee "$output_file"
+      ;;
+    opencode)
+      opencode --output-format stream-json \
+        --approval-mode full-auto \
+        "$prompt" 2>&1 | tee "$output_file"
+      ;;
+    cursor)
+      agent --dangerously-skip-permissions \
+        -p "$prompt" 2>&1 | tee "$output_file"
+      ;;
+    qwen)
+      qwen --output-format stream-json \
+        --approval-mode yolo \
+        -p "$prompt" 2>&1 | tee "$output_file"
+      ;;
+    droid)
+      droid exec --output-format stream-json \
+        --auto medium \
+        "$prompt" 2>&1 | tee "$output_file"
+      ;;
+    codex)
+      codex exec --full-auto \
+        --json \
+        "$prompt" 2>&1 | tee "$output_file"
+      ;;
+  esac
+
+  local exit_code=$?
+
+  # Log to history
+  if [[ $exit_code -eq 0 ]]; then
+    log_task_history "$task" "completed"
+    log_success "Task completed"
+  else
+    log_task_history "$task" "failed"
+    log_error "Task failed"
+  fi
+
+  rm -f "$output_file"
+  return $exit_code
+}
+
+# ============================================
 # HELP & VERSION
 # ============================================
 
@@ -145,7 +605,18 @@ show_help() {
 ${BOLD}Ralphy${RESET} - Autonomous AI Coding Loop (v${VERSION})
 
 ${BOLD}USAGE:${RESET}
-  ./ralphy.sh [options]
+  ./ralphy.sh [options]              # PRD mode (requires PRD.md)
+  ./ralphy.sh "task description"     # Single task mode (brownfield)
+  ./ralphy.sh --init                 # Initialize .ralphy/ config
+
+${BOLD}CONFIG & SETUP:${RESET}
+  --init              Initialize .ralphy/ with smart defaults
+  --config            Show current configuration
+  --add-rule "..."    Add a rule to config (e.g., "Always use Zod")
+
+${BOLD}SINGLE TASK MODE:${RESET}
+  "task description"  Run a single task without PRD (quotes required)
+  --no-commit         Don't auto-commit after task completion
 
 ${BOLD}AI ENGINE OPTIONS:${RESET}
   --claude            Use Claude Code (default)
@@ -153,6 +624,7 @@ ${BOLD}AI ENGINE OPTIONS:${RESET}
   --cursor            Use Cursor agent
   --codex             Use Codex CLI
   --qwen              Use Qwen-Code
+  --droid             Use Factory Droid
 
 ${BOLD}WORKFLOW OPTIONS:${RESET}
   --no-tests          Skip writing and running tests
@@ -190,10 +662,14 @@ ${BOLD}OTHER OPTIONS:${RESET}
   --version           Show version number
 
 ${BOLD}EXAMPLES:${RESET}
+  # Brownfield mode (single tasks in existing projects)
+  ./ralphy.sh --init                       # Initialize config
+  ./ralphy.sh "add dark mode toggle"       # Run single task
+  ./ralphy.sh "fix the login bug" --cursor # Single task with Cursor
+
+  # PRD mode (task lists)
   ./ralphy.sh                              # Run with Claude Code
   ./ralphy.sh --codex                      # Run with Codex CLI
-  ./ralphy.sh --opencode                   # Run with OpenCode
-  ./ralphy.sh --cursor                     # Run with Cursor agent
   ./ralphy.sh --branch-per-task --create-pr  # Feature branch workflow
   ./ralphy.sh --parallel --max-parallel 4  # Run 4 tasks concurrently
   ./ralphy.sh --yaml tasks.yaml            # Use YAML task file
@@ -257,6 +733,10 @@ parse_args() {
         ;;
       --qwen)
         AI_ENGINE="qwen"
+        shift
+        ;;
+      --droid)
+        AI_ENGINE="droid"
         shift
         ;;
       --dry-run)
@@ -342,10 +822,36 @@ parse_args() {
         show_version
         exit 0
         ;;
-      *)
+      --init)
+        INIT_MODE=true
+        shift
+        ;;
+      --config)
+        SHOW_CONFIG=true
+        shift
+        ;;
+      --add-rule)
+        [[ -z "${2:-}" ]] && { log_error "--add-rule requires an argument"; exit 1; }
+        ADD_RULE="$2"
+        shift 2
+        ;;
+      --no-commit)
+        AUTO_COMMIT=false
+        shift
+        ;;
+      -*)
         log_error "Unknown option: $1"
         echo "Use --help for usage"
         exit 1
+        ;;
+      *)
+        # Positional argument = single task (brownfield mode)
+        if [[ -z "$SINGLE_TASK" ]]; then
+          SINGLE_TASK="$1"
+        else
+          SINGLE_TASK="$SINGLE_TASK $1"
+        fi
+        shift
         ;;
     esac
   done
@@ -422,6 +928,12 @@ check_requirements() {
         exit 1
       fi
       ;;
+    droid)
+      if ! command -v droid &>/dev/null; then
+        log_error "Factory Droid CLI not found. Install from https://docs.factory.ai/cli/getting-started/quickstart"
+        exit 1
+      fi
+      ;;
     *)
       if ! command -v claude &>/dev/null; then
         log_error "Claude Code CLI not found."
@@ -461,10 +973,12 @@ check_requirements() {
     exit 1
   fi
 
-  # Create progress.txt if missing
-  if [[ ! -f "progress.txt" ]]; then
-    log_warn "progress.txt not found, creating it..."
-    touch progress.txt
+  # Ensure .ralphy/ directory exists and create progress.txt if missing
+  mkdir -p "$RALPHY_DIR"
+  if [[ ! -f "$PROGRESS_FILE" ]]; then
+    log_info "Creating $PROGRESS_FILE..."
+    echo "# Ralphy Progress Log" > "$PROGRESS_FILE"
+    echo "" >> "$PROGRESS_FILE"
   fi
 
   # Set base branch if not specified
@@ -520,10 +1034,18 @@ cleanup() {
   if [[ $exit_code -eq 130 ]]; then
     printf "\n"
     log_warn "Interrupted! Cleaned up."
-    
+
     # Show branches created if any
     if [[ -n "${task_branches[*]+"${task_branches[*]}"}" ]]; then
       log_info "Branches created: ${task_branches[*]}"
+    fi
+
+    # Show integration branches if any (for parallel group workflows)
+    if [[ -n "${integration_branches[*]+"${integration_branches[*]}"}" ]]; then
+      log_info "Integration branches: ${integration_branches[*]}"
+      if [[ -n "$ORIGINAL_BASE_BRANCH" ]]; then
+        log_info "To resume: merge integration branches into $ORIGINAL_BASE_BRANCH"
+      fi
     fi
   fi
 }
@@ -893,14 +1415,47 @@ notify_error() {
 build_prompt() {
   local task_override="${1:-}"
   local prompt=""
-  
+
+  # Add .ralphy/ config if available (works with PRD mode too)
+  if [[ -d "$RALPHY_DIR" ]]; then
+    # Add project context
+    local context
+    context=$(load_project_context)
+    if [[ -n "$context" ]]; then
+      prompt+="## Project Context
+$context
+
+"
+    fi
+
+    # Add rules
+    local rules
+    rules=$(load_ralphy_rules)
+    if [[ -n "$rules" ]]; then
+      prompt+="## Rules (you MUST follow these)
+$rules
+
+"
+    fi
+
+    # Add boundaries
+    local never_touch
+    never_touch=$(load_ralphy_boundaries "never_touch")
+    if [[ -n "$never_touch" ]]; then
+      prompt+="## Boundaries - Do NOT modify these files:
+$never_touch
+
+"
+    fi
+  fi
+
   # Add context based on PRD source
   case "$PRD_SOURCE" in
     markdown)
-      prompt="@${PRD_FILE} @progress.txt"
+      prompt="@${PRD_FILE} @$PROGRESS_FILE"
       ;;
     yaml)
-      prompt="@${PRD_FILE} @progress.txt"
+      prompt="@${PRD_FILE} @$PROGRESS_FILE"
       ;;
     github)
       # For GitHub issues, we include the issue body
@@ -913,7 +1468,7 @@ build_prompt() {
 Issue Description:
 $issue_body
 
-@progress.txt"
+@$PROGRESS_FILE"
       ;;
   esac
   
@@ -947,14 +1502,14 @@ $step. Update ${PRD_FILE} to mark the task as completed (set completed: true)."
       ;;
     github)
       prompt="$prompt
-$step. The task will be marked complete automatically. Just note the completion in progress.txt."
+$step. The task will be marked complete automatically. Just note the completion in $PROGRESS_FILE."
       ;;
   esac
-  
+
   step=$((step+1))
-  
+
   prompt="$prompt
-$step. Append your progress to progress.txt.
+$step. Append your progress to $PROGRESS_FILE.
 $((step+1)). Commit your changes with a descriptive message.
 ONLY WORK ON A SINGLE TASK."
 
@@ -1035,6 +1590,12 @@ run_ai_command() {
           ${model_flag:+"$model_flag"} \
           -p "$prompt" > "$output_file" 2>&1 &
       fi
+      ;;
+    droid)
+      # Droid: use exec with stream-json output and medium autonomy for development
+      droid exec --output-format stream-json \
+        --auto medium \
+        "$prompt" > "$output_file" 2>&1 &
       ;;
     codex)
       CODEX_LAST_MESSAGE_FILE="${output_file}.last"
@@ -1180,6 +1741,27 @@ parse_ai_result() {
       if [[ -z "$response" ]]; then
         response="Task completed"
       fi
+      ;;
+    droid)
+      # Droid stream-json parsing
+      # Look for completion event which has the final result
+      local completion_line
+      completion_line=$(echo "$result" | grep '"type":"completion"' | tail -1)
+
+      if [[ -n "$completion_line" ]]; then
+        response=$(echo "$completion_line" | jq -r '.finalText // "Task completed"' 2>/dev/null || echo "Task completed")
+        # Droid provides duration_ms in completion event
+        local dur_ms
+        dur_ms=$(echo "$completion_line" | jq -r '.durationMs // 0' 2>/dev/null || echo "0")
+        if [[ "$dur_ms" =~ ^[0-9]+$ ]] && [[ "$dur_ms" -gt 0 ]]; then
+          # Store duration for tracking
+          actual_cost="duration:$dur_ms"
+        fi
+      fi
+
+      # Tokens remain 0 for Droid (not exposed in exec mode)
+      input_tokens=0
+      output_tokens=0
       ;;
     codex)
       if [[ -n "$CODEX_LAST_MESSAGE_FILE" ]] && [[ -f "$CODEX_LAST_MESSAGE_FILE" ]]; then
@@ -1576,6 +2158,9 @@ run_parallel_agent() {
   # Create agent-specific progress file to prevent race conditions
   local progress_file="progress-agent-$agent_num.txt"
   touch "$worktree_dir/$progress_file"
+  
+  # Also ensure .ralphy/ exists for brownfield compatibility
+  mkdir -p "$worktree_dir/$RALPHY_DIR"
 
   # Build prompt for this specific task
   local prompt="You are working on a specific task. Focus ONLY on this task:
@@ -1663,6 +2248,14 @@ Focus only on implementing: $task_name"
               -p "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         fi
+        ;;
+      droid)
+        (
+          cd "$worktree_dir"
+          droid exec --output-format stream-json \
+            --auto medium \
+            "$prompt"
+        ) > "$tmpfile" 2>>"$log_file"
         ;;
       codex)
         CODEX_LAST_MESSAGE_FILE="$tmpfile.last"
@@ -1866,10 +2459,16 @@ run_parallel_tasks() {
   fi
   export BASE_BRANCH
   log_info "Base branch: $BASE_BRANCH"
-  
+
+  # Store original base branch for final merge (addresses Greptile review)
+  # Using global variables so cleanup() can access them on interrupt
+  ORIGINAL_BASE_BRANCH="$BASE_BRANCH"
+  integration_branches=()  # Reset for this run
+
   # Export variables needed by subshell agents
   export AI_ENGINE MAX_RETRIES RETRY_DELAY PRD_SOURCE PRD_FILE CREATE_PR PR_DRAFT AI_MODEL AI_TIMEOUT
-  
+
+
   local batch_num=0
   local completed_branches=()
   local groups=("all")
@@ -1884,6 +2483,7 @@ run_parallel_tasks() {
   for group in "${groups[@]}"; do
     local tasks=()
     local group_label=""
+    local group_completed_branches=()  # Track branches completed in this group
 
     if [[ "$PRD_SOURCE" == "yaml" ]]; then
       while IFS= read -r task; do
@@ -2056,6 +2656,7 @@ run_parallel_tasks() {
             total_output_tokens=$((total_output_tokens + out_tok))
             if [[ -n "$branch" ]]; then
               completed_branches+=("$branch")
+              group_completed_branches+=("$branch")  # Also track per-group
               branch_info=" → ${CYAN}$branch${RESET}"
             fi
             if [[ "$pr_failed" == true ]]; then
@@ -2110,6 +2711,61 @@ run_parallel_tasks() {
       fi
     done
 
+    # After each parallel_group completes, merge branches into integration branch
+    # so the next group sees the completed work (fixes issue #13)
+    # NOTE: Uses git branch instead of git checkout to avoid changing HEAD while worktrees are active (Greptile review)
+    if [[ "$PRD_SOURCE" == "yaml" ]] && [[ ${#group_completed_branches[@]} -gt 0 ]] && [[ ${#groups[@]} -gt 1 ]]; then
+      local integration_branch="ralphy/integration-group-$group"
+      log_info "Creating integration branch for group $group: $integration_branch"
+
+      # Create integration branch from current BASE_BRANCH without switching HEAD
+      # This avoids state confusion while worktrees are active
+      if git branch "$integration_branch" "$BASE_BRANCH" >/dev/null 2>&1; then
+        local merge_failed=false
+        local current_head
+        current_head=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+
+        # Temporarily checkout the integration branch to perform merges
+        if git checkout "$integration_branch" >/dev/null 2>&1; then
+          for branch in "${group_completed_branches[@]}"; do
+            log_debug "Merging $branch into $integration_branch"
+            if ! git merge --no-edit "$branch" >/dev/null 2>&1; then
+              log_warn "Conflict merging $branch into integration branch"
+              # Abort the merge to leave branch in clean state (Greptile review)
+              git merge --abort >/dev/null 2>&1 || true
+              merge_failed=true
+              break
+            fi
+          done
+
+          # Return to original HEAD to avoid state confusion
+          if [[ -n "$current_head" ]]; then
+            git checkout "$current_head" >/dev/null 2>&1 || git checkout "$ORIGINAL_BASE_BRANCH" >/dev/null 2>&1 || true
+          else
+            git checkout "$ORIGINAL_BASE_BRANCH" >/dev/null 2>&1 || true
+          fi
+
+          if [[ "$merge_failed" == false ]]; then
+            # Update BASE_BRANCH for next group
+            BASE_BRANCH="$integration_branch"
+            export BASE_BRANCH
+            integration_branches+=("$integration_branch")  # Track for cleanup
+            log_info "Updated BASE_BRANCH to $integration_branch for next group"
+          else
+            # Delete failed integration branch
+            git branch -D "$integration_branch" >/dev/null 2>&1 || true
+            log_warn "Integration merge failed; next group will branch from current BASE_BRANCH ($BASE_BRANCH)"
+          fi
+        else
+          # Couldn't checkout, clean up the branch
+          git branch -D "$integration_branch" >/dev/null 2>&1 || true
+          log_warn "Could not checkout integration branch; next group will branch from current BASE_BRANCH ($BASE_BRANCH)"
+        fi
+      else
+        log_warn "Could not create integration branch; next group will branch from current BASE_BRANCH ($BASE_BRANCH)"
+      fi
+    fi
+
     if [[ $MAX_ITERATIONS -gt 0 ]] && [[ $iteration -ge $MAX_ITERATIONS ]]; then
       break
     fi
@@ -2126,7 +2782,7 @@ run_parallel_tasks() {
   if [[ ${#completed_branches[@]} -gt 0 ]]; then
     echo ""
     echo "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    
+
     if [[ "$CREATE_PR" == true ]]; then
       # PRs were created, just show the branches
       echo "${BOLD}Branches created by agents:${RESET}"
@@ -2134,19 +2790,65 @@ run_parallel_tasks() {
         echo "  ${CYAN}•${RESET} $branch"
       done
     else
-      # Auto-merge branches back to main
-      echo "${BOLD}Merging agent branches into ${BASE_BRANCH}...${RESET}"
+      # Auto-merge branches into ORIGINAL base branch (not integration branches)
+      # This addresses Greptile review: final merge should use original base, not integration branch
+      local final_target="$ORIGINAL_BASE_BRANCH"
+
+      # If we used integration branches, the final integration branch contains all the work
+      # We just need to merge the final integration branch into the original base
+      if [[ ${#integration_branches[@]} -gt 0 ]]; then
+        local final_integration="${integration_branches[-1]}"  # Last integration branch
+        echo "${BOLD}Merging integration branch into ${final_target}...${RESET}"
+        echo ""
+
+        if ! git checkout "$final_target" >/dev/null 2>&1; then
+          log_warn "Could not checkout $final_target; leaving integration branch unmerged."
+          echo "${BOLD}Integration branch: ${CYAN}$final_integration${RESET}"
+          return 0
+        fi
+
+        printf "  Merging ${CYAN}%s${RESET}..." "$final_integration"
+        if git merge --no-edit "$final_integration" >/dev/null 2>&1; then
+          printf " ${GREEN}✓${RESET}\n"
+
+          # Cleanup all integration branches after successful merge (Greptile review)
+          echo ""
+          echo "${DIM}Cleaning up integration branches...${RESET}"
+          for int_branch in "${integration_branches[@]}"; do
+            git branch -D "$int_branch" >/dev/null 2>&1 && \
+              echo "  ${DIM}Deleted ${int_branch}${RESET}" || true
+          done
+
+          # Also cleanup the individual agent branches that were merged into integration
+          echo "${DIM}Cleaning up agent branches...${RESET}"
+          for branch in "${completed_branches[@]}"; do
+            git branch -D "$branch" >/dev/null 2>&1 && \
+              echo "  ${DIM}Deleted ${branch}${RESET}" || true
+          done
+        else
+          printf " ${YELLOW}conflict${RESET}\n"
+          git merge --abort >/dev/null 2>&1 || true
+          log_warn "Could not merge integration branch; leaving branches for manual resolution."
+          echo "${BOLD}Integration branch: ${CYAN}$final_integration${RESET}"
+          echo "${BOLD}Original base: ${CYAN}$final_target${RESET}"
+        fi
+
+        return 0
+      fi
+
+      # No integration branches - merge individual agent branches directly
+      echo "${BOLD}Merging agent branches into ${final_target}...${RESET}"
       echo ""
 
-      if ! git checkout "$BASE_BRANCH" >/dev/null 2>&1; then
-        log_warn "Could not checkout $BASE_BRANCH; leaving agent branches unmerged."
+      if ! git checkout "$final_target" >/dev/null 2>&1; then
+        log_warn "Could not checkout $final_target; leaving agent branches unmerged."
         echo "${BOLD}Branches created by agents:${RESET}"
         for branch in "${completed_branches[@]}"; do
           echo "  ${CYAN}•${RESET} $branch"
         done
         return 0
       fi
-      
+
       local merge_failed=()
       
       for branch in "${completed_branches[@]}"; do
@@ -2230,6 +2932,11 @@ Be careful to preserve functionality from BOTH branches. The goal is to integrat
               qwen --output-format stream-json \
                 --approval-mode yolo \
                 -p "$resolve_prompt" > "$resolve_tmpfile" 2>&1
+              ;;
+            droid)
+              droid exec --output-format stream-json \
+                --auto medium \
+                "$resolve_prompt" > "$resolve_tmpfile" 2>&1
               ;;
             codex)
               codex exec --full-auto \
@@ -2338,9 +3045,9 @@ show_summary() {
   echo ""
   echo "${BOLD}>>> Cost Summary${RESET}"
   
-  # Cursor doesn't provide token usage, but does provide duration
-  if [[ "$AI_ENGINE" == "cursor" ]]; then
-    echo "${DIM}Token usage not available (Cursor CLI doesn't expose this data)${RESET}"
+  # Cursor and Droid don't provide token usage, but do provide duration
+  if [[ "$AI_ENGINE" == "cursor" ]] || [[ "$AI_ENGINE" == "droid" ]]; then
+    echo "${DIM}Token usage not available (CLI doesn't expose this data)${RESET}"
     if [[ "$total_duration_ms" -gt 0 ]]; then
       local dur_sec=$((total_duration_ms / 1000))
       local dur_min=$((dur_sec / 60))
@@ -2393,17 +3100,80 @@ show_summary() {
 main() {
   parse_args "$@"
 
+  # Handle --init mode
+  if [[ "$INIT_MODE" == true ]]; then
+    init_ralphy_config
+    exit 0
+  fi
+
+  # Handle --config mode
+  if [[ "$SHOW_CONFIG" == true ]]; then
+    show_ralphy_config
+    exit 0
+  fi
+
+  # Handle --add-rule
+  if [[ -n "$ADD_RULE" ]]; then
+    add_ralphy_rule "$ADD_RULE"
+    exit 0
+  fi
+
+  # Handle single-task (brownfield) mode
+  if [[ -n "$SINGLE_TASK" ]]; then
+    # Set up cleanup trap
+    trap cleanup EXIT
+    trap 'exit 130' INT TERM HUP
+
+    # Check basic requirements (AI engine, git)
+    case "$AI_ENGINE" in
+      claude) command -v claude &>/dev/null || { log_error "Claude Code CLI not found"; exit 1; } ;;
+      opencode) command -v opencode &>/dev/null || { log_error "OpenCode CLI not found"; exit 1; } ;;
+      cursor) command -v agent &>/dev/null || { log_error "Cursor agent CLI not found"; exit 1; } ;;
+      codex) command -v codex &>/dev/null || { log_error "Codex CLI not found"; exit 1; } ;;
+      qwen) command -v qwen &>/dev/null || { log_error "Qwen-Code CLI not found"; exit 1; } ;;
+      droid) command -v droid &>/dev/null || { log_error "Factory Droid CLI not found"; exit 1; } ;;
+    esac
+
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+      log_error "Not a git repository"
+      exit 1
+    fi
+
+    # Show brownfield banner
+    echo "${BOLD}============================================${RESET}"
+    echo "${BOLD}Ralphy${RESET} - Single Task Mode"
+    local engine_display
+    case "$AI_ENGINE" in
+      opencode) engine_display="${CYAN}OpenCode${RESET}" ;;
+      cursor) engine_display="${YELLOW}Cursor Agent${RESET}" ;;
+      codex) engine_display="${BLUE}Codex${RESET}" ;;
+      qwen) engine_display="${GREEN}Qwen-Code${RESET}" ;;
+      droid) engine_display="${MAGENTA}Factory Droid${RESET}" ;;
+      *) engine_display="${MAGENTA}Claude Code${RESET}" ;;
+    esac
+    echo "Engine: $engine_display"
+    if [[ -d "$RALPHY_DIR" ]]; then
+      echo "Config: ${GREEN}$RALPHY_DIR/${RESET}"
+    else
+      echo "Config: ${DIM}none (run --init to configure)${RESET}"
+    fi
+    echo "${BOLD}============================================${RESET}"
+
+    run_brownfield_task "$SINGLE_TASK"
+    exit $?
+  fi
+
   if [[ "$DRY_RUN" == true ]] && [[ "$MAX_ITERATIONS" -eq 0 ]]; then
     MAX_ITERATIONS=1
   fi
-  
+
   # Set up cleanup trap
   trap cleanup EXIT
   trap 'exit 130' INT TERM HUP
-  
+
   # Check requirements
   check_requirements
-  
+
   # Show banner
   echo "${BOLD}============================================${RESET}"
   echo "${BOLD}Ralphy${RESET} - Running until PRD is complete"
@@ -2413,11 +3183,15 @@ main() {
     cursor) engine_display="${YELLOW}Cursor Agent${RESET}" ;;
     codex) engine_display="${BLUE}Codex${RESET}" ;;
     qwen) engine_display="${GREEN}Qwen-Code${RESET}" ;;
+    droid) engine_display="${MAGENTA}Factory Droid${RESET}" ;;
     *) engine_display="${MAGENTA}Claude Code${RESET}" ;;
   esac
   echo "Engine: $engine_display"
   echo "Source: ${CYAN}$PRD_SOURCE${RESET} (${PRD_FILE:-$GITHUB_REPO})"
-  
+  if [[ -d "$RALPHY_DIR" ]]; then
+    echo "Config: ${GREEN}$RALPHY_DIR/${RESET} (rules loaded)"
+  fi
+
   local mode_parts=()
   [[ "$SKIP_TESTS" == true ]] && mode_parts+=("no-tests")
   [[ "$SKIP_LINT" == true ]] && mode_parts+=("no-lint")
