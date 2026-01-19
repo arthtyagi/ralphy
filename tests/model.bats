@@ -25,34 +25,34 @@
   [[ "$output" == *'[[ -n "$AI_MODEL" ]] && model_flag="--model $AI_MODEL"'* ]]
 }
 
-@test "Claude Code command includes model_flag placeholder" {
+@test "Claude Code command includes properly quoted model_flag" {
   run grep -A 100 'run_ai_command()' "$BATS_TEST_DIRNAME/../ralphy.sh"
   [[ "$output" == *'claude --dangerously-skip-permissions'* ]]
-  [[ "$output" == *'${model_flag:+$model_flag}'* ]]
+  [[ "$output" == *'${model_flag:+"$model_flag"}'* ]]
 }
 
-@test "OpenCode command includes model_flag placeholder" {
+@test "OpenCode command includes properly quoted model_flag" {
   run grep -A 100 'run_ai_command()' "$BATS_TEST_DIRNAME/../ralphy.sh"
   [[ "$output" == *'opencode run'* ]]
-  [[ "$output" == *'${model_flag:+$model_flag}'* ]]
+  [[ "$output" == *'${model_flag:+"$model_flag"}'* ]]
 }
 
-@test "Cursor command includes model_flag placeholder" {
+@test "Cursor command includes properly quoted model_flag" {
   run grep -A 100 'run_ai_command()' "$BATS_TEST_DIRNAME/../ralphy.sh"
   [[ "$output" == *'agent --print --force'* ]]
-  [[ "$output" == *'${model_flag:+$model_flag}'* ]]
+  [[ "$output" == *'${model_flag:+"$model_flag"}'* ]]
 }
 
-@test "Codex command includes model_flag placeholder" {
+@test "Codex command includes properly quoted model_flag" {
   run grep -A 100 'run_ai_command()' "$BATS_TEST_DIRNAME/../ralphy.sh"
   [[ "$output" == *'codex exec --full-auto'* ]]
-  [[ "$output" == *'${model_flag:+$model_flag}'* ]]
+  [[ "$output" == *'${model_flag:+"$model_flag"}'* ]]
 }
 
-@test "Qwen command includes model_flag placeholder" {
+@test "Qwen command includes properly quoted model_flag" {
   run grep -A 100 'run_ai_command()' "$BATS_TEST_DIRNAME/../ralphy.sh"
   [[ "$output" == *'qwen --output-format stream-json'* ]]
-  [[ "$output" == *'${model_flag:+$model_flag}'* ]]
+  [[ "$output" == *'${model_flag:+"$model_flag"}'* ]]
 }
 
 @test "AI_MODEL is exported for parallel mode" {

@@ -989,12 +989,12 @@ run_ai_command() {
       if [[ -n "$timeout_cmd" ]]; then
         OPENCODE_PERMISSION='{"*":"allow"}' "$timeout_cmd" "$AI_TIMEOUT" opencode run \
           --format json \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           "$prompt" > "$output_file" 2>&1 &
       else
         OPENCODE_PERMISSION='{"*":"allow"}' opencode run \
           --format json \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           "$prompt" > "$output_file" 2>&1 &
       fi
       ;;
@@ -1003,12 +1003,12 @@ run_ai_command() {
       if [[ -n "$timeout_cmd" ]]; then
         "$timeout_cmd" "$AI_TIMEOUT" agent --print --force \
           --output-format stream-json \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           "$prompt" > "$output_file" 2>&1 &
       else
         agent --print --force \
           --output-format stream-json \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           "$prompt" > "$output_file" 2>&1 &
       fi
       ;;
@@ -1017,12 +1017,12 @@ run_ai_command() {
       if [[ -n "$timeout_cmd" ]]; then
         "$timeout_cmd" "$AI_TIMEOUT" qwen --output-format stream-json \
           --approval-mode yolo \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           -p "$prompt" > "$output_file" 2>&1 &
       else
         qwen --output-format stream-json \
           --approval-mode yolo \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           -p "$prompt" > "$output_file" 2>&1 &
       fi
       ;;
@@ -1032,13 +1032,13 @@ run_ai_command() {
       if [[ -n "$timeout_cmd" ]]; then
         "$timeout_cmd" "$AI_TIMEOUT" codex exec --full-auto \
           --json \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
           "$prompt" > "$output_file" 2>&1 &
       else
         codex exec --full-auto \
           --json \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
           "$prompt" > "$output_file" 2>&1 &
       fi
@@ -1049,13 +1049,13 @@ run_ai_command() {
         "$timeout_cmd" "$AI_TIMEOUT" claude --dangerously-skip-permissions \
           --verbose \
           --output-format stream-json \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           -p "$prompt" > "$output_file" 2>&1 &
       else
         claude --dangerously-skip-permissions \
           --verbose \
           --output-format stream-json \
-          ${model_flag:+$model_flag} \
+          ${model_flag:+"$model_flag"} \
           -p "$prompt" > "$output_file" 2>&1 &
       fi
       ;;
@@ -1598,7 +1598,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             OPENCODE_PERMISSION='{"*":"allow"}' "$timeout_cmd" "$AI_TIMEOUT" opencode run \
               --format json \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         else
@@ -1606,7 +1606,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             OPENCODE_PERMISSION='{"*":"allow"}' opencode run \
               --format json \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         fi
@@ -1617,7 +1617,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             "$timeout_cmd" "$AI_TIMEOUT" agent --print --force \
               --output-format stream-json \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         else
@@ -1625,7 +1625,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             agent --print --force \
               --output-format stream-json \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         fi
@@ -1636,7 +1636,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             "$timeout_cmd" "$AI_TIMEOUT" qwen --output-format stream-json \
               --approval-mode yolo \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               -p "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         else
@@ -1644,7 +1644,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             qwen --output-format stream-json \
               --approval-mode yolo \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               -p "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
         fi
@@ -1657,7 +1657,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             "$timeout_cmd" "$AI_TIMEOUT" codex exec --full-auto \
               --json \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
@@ -1666,7 +1666,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             codex exec --full-auto \
               --json \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               --output-last-message "$CODEX_LAST_MESSAGE_FILE" \
               "$prompt"
           ) > "$tmpfile" 2>>"$log_file"
@@ -1678,7 +1678,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             "$timeout_cmd" "$AI_TIMEOUT" claude --dangerously-skip-permissions \
               --verbose \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               -p "$prompt" \
               --output-format stream-json
           ) > "$tmpfile" 2>>"$log_file"
@@ -1687,7 +1687,7 @@ Focus only on implementing: $task_name"
             cd "$worktree_dir"
             claude --dangerously-skip-permissions \
               --verbose \
-              ${model_flag:+$model_flag} \
+              ${model_flag:+"$model_flag"} \
               -p "$prompt" \
               --output-format stream-json
           ) > "$tmpfile" 2>>"$log_file"
