@@ -1,0 +1,56 @@
+src/middleware/auth.js
+  7a3aef0aeca49855 1-24
+src/controllers/auth.js
+  7a3aef0aeca49855 1-48
+src/__tests__/auth.test.js
+  7a3aef0aeca49855 1-154
+.gitignore
+  7a3aef0aeca49855 1-2
+package.json
+  7a3aef0aeca49855 10-11
+src/config/auth.js
+  7a3aef0aeca49855 1-7
+progress.txt
+  7a3aef0aeca49855 12
+PRD.md
+  7a3aef0aeca49855 11
+src/routes/auth.js
+  7a3aef0aeca49855 1-31
+src/index.js
+  7a3aef0aeca49855 1-7
+src/app.js
+  7a3aef0aeca49855 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.34",
+  "base_commit_sha": "21385db26e774d7e6e521138a7272cf4561e8a5d",
+  "prompts": {
+    "7a3aef0aeca49855": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "be6dd9e0-22be-455d-bd35-883c7f4f4cd2",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 290,
+      "total_deletions": 2,
+      "accepted_lines": 290,
+      "overriden_lines": 0
+    },
+    "b4e3ed4fd79283de": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "opencode-transcript-ses_43304eba5ffetVNYNmvs8aj6m1-445ef715-0620-4946-8678-f7ac82efbfee",
+        "model": "unknown"
+      },
+      "human_author": "arthtyagi <arthtyagi7@icloud.com>",
+      "messages": [],
+      "total_additions": 22,
+      "total_deletions": 0,
+      "accepted_lines": 22,
+      "overriden_lines": 0
+    }
+  }
+}
