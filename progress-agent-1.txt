@@ -1,0 +1,34 @@
+## Task: Fix handling of special character ] in task parsing
+
+### Problem
+The `mark_task_complete_markdown()` function in `ralphy.sh` (line 557) had a bug in its regex for escaping special characters. The character class `[[\.*^$/]` was meant to escape sed BRE special characters, but it failed to properly include `]`.
+
+In POSIX sed character classes, `]` terminates the class. The pattern `[[\.*^$/]` was matching `[`, `.`, `*`, `^`, `$`, `/` but NOT `]` because the `]` at the end was interpreted as closing the class, not as a character to match.
+
+### Impact
+When a task name contained `]` (like "Fix handling of special character ] in task parsing"), the `mark_task_complete_markdown()` function would:
+1. Fail to escape the `]` in the task name
+2. Generate a malformed sed command
+3. Fail to mark the task complete in PRD.md
+4. Cause the loop to potentially retry the same task infinitely
+
+### Fix
+Changed line 557 in `ralphy.sh` from:
+```bash
+escaped_task=$(printf '%s\n' "$task" | sed 's/[[\.*^$/]/\\&/g')
+```
+to:
+```bash
+escaped_task=$(printf '%s\n' "$task" | sed 's/[][\.*^$/]/\\&/g')
+```
+
+The fix places `]` first in the character class (`[][\.*^$/]`), which is the POSIX-compliant way to include a literal `]` in a bracket expression.
+
+### Tests Added
+Created `tests/special-chars.bats` with 10 test cases covering:
+- Individual special character escaping ([ ] . * ^ $ /)
+- Multiple special characters combined
+- Verification that the code uses the correct pattern
+
+### Verification
+- All 92 tests pass (including 10 new tests for special character handling)
