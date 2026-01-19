@@ -13,3 +13,37 @@
 2026-01-19: Only save checkpoint after verifying PR was actually created. In run_single_task(), added pr_created variable to track create_pull_request success; checkpoint is only saved if PR creation succeeded or wasn't requested. In run_parallel_agent(), replaced `|| true` with proper exit code checking and log warnings on PR failure; status_file now shows "done_no_pr" when task succeeded but PR creation failed. Fixed SC2181 by checking exit code directly with `if !`. Added 4 BATS tests in tests/checkpoint.bats (now 15 tests). Tests pass (77 total). Linting passes (no new ShellCheck errors).
 2026-01-19: Fixed model flag quoting in run_ai_command and run_parallel_agent. Changed all 20 occurrences of `${model_flag:+$model_flag}` to properly quoted `${model_flag:+"$model_flag"}` pattern to prevent word splitting issues when AI_MODEL contains spaces or special characters. Updated 5 BATS tests in tests/model.bats to verify the new quoting pattern. Tests pass (77 total). Linting passes (no new ShellCheck errors, pre-existing warnings unchanged).
 2026-01-19: Added data loss protection in merge_agent_progress_files. Changed logic to only remove source files after cat succeeds: (1) wrap cat in if-then to check exit code, (2) only rm after successful append, (3) track failed files in array, (4) log warning on failure with "keeping source file to prevent data loss", (5) report count and list of failed files at end. Added 5 BATS tests in tests/parallel-progress.bats (now 17 tests). Tests pass (82 total). Linting passes (no new ShellCheck errors).
+## Task: Fix handling of special character ] in task parsing
+
+### Problem
+The `mark_task_complete_markdown()` function in `ralphy.sh` (line 557) had a bug in its regex for escaping special characters. The character class `[[\.*^$/]` was meant to escape sed BRE special characters, but it failed to properly include `]`.
+
+In POSIX sed character classes, `]` terminates the class. The pattern `[[\.*^$/]` was matching `[`, `.`, `*`, `^`, `$`, `/` but NOT `]` because the `]` at the end was interpreted as closing the class, not as a character to match.
+
+### Impact
+When a task name contained `]` (like "Fix handling of special character ] in task parsing"), the `mark_task_complete_markdown()` function would:
+1. Fail to escape the `]` in the task name
+2. Generate a malformed sed command
+3. Fail to mark the task complete in PRD.md
+4. Cause the loop to potentially retry the same task infinitely
+
+### Fix
+Changed line 557 in `ralphy.sh` from:
+```bash
+escaped_task=$(printf '%s\n' "$task" | sed 's/[[\.*^$/]/\\&/g')
+```
+to:
+```bash
+escaped_task=$(printf '%s\n' "$task" | sed 's/[][\.*^$/]/\\&/g')
+```
+
+The fix places `]` first in the character class (`[][\.*^$/]`), which is the POSIX-compliant way to include a literal `]` in a bracket expression.
+
+### Tests Added
+Created `tests/special-chars.bats` with 10 test cases covering:
+- Individual special character escaping ([ ] . * ^ $ /)
+- Multiple special characters combined
+- Verification that the code uses the correct pattern
+
+### Verification
+- All 92 tests pass (including 10 new tests for special character handling)

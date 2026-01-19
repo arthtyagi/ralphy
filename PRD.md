@@ -30,3 +30,4 @@ No new features. No refactoring for its own sake.
 - [x] Only save checkpoint after verifying PR was actually created (check gh pr create exit code before writing checkpoint)
 - [x] Fix model flag quoting in run_ai_command: use proper shell quoting `${model_flag:+"$model_flag"}` pattern
 - [x] Add data loss protection in merge_agent_progress_files - check if cat succeeds before removing source files
+- [ ] Fix handling of special character ] in task parsing
